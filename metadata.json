@@ -1,0 +1,6 @@
+{
+  "name": "Amra Chor - 3D Bangladeshi Open World Comedy Game",
+  "description": "Advanced 3D open world Bangladeshi comedy game featuring Dhaka streets, rickshaws, CNGs, police chases, tea stalls, and funny missions.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
