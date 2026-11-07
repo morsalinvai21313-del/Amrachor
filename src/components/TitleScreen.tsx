@@ -52,26 +52,38 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
 
       {/* Center Left: Main Title Lockup */}
       <div className="my-auto max-w-lg pointer-events-auto">
-        <div className="inline-block bg-amber-500/20 text-amber-300 px-3 py-1 rounded-full text-xs font-bold mb-2 border border-amber-500/40">
-          ৩ডি ওপেন ওয়ার্ল্ড বাংলাদেশি কমেডি গেম
+        <div className="inline-flex items-center gap-2 bg-amber-500/20 text-amber-300 px-3 py-1 rounded-full text-xs font-bold mb-2 border border-amber-500/40">
+          <span>🎮</span>
+          <span>৩ডি ওপেন ওয়ার্ল্ড বাংলাদেশি কমেডি গেম</span>
         </div>
 
-        {/* Bespoke Styled Bengali Title */}
-        <h1 className="text-6xl sm:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 via-amber-400 to-red-600 drop-shadow-[0_4px_12px_rgba(220,38,38,0.8)] tracking-wide leading-tight">
-          আমরা চোর
-        </h1>
-
-        <div className="mt-1 flex items-center gap-2 text-yellow-300 text-lg sm:text-xl font-bold drop-shadow-md">
-          <span>চোরগিরি করাই আমাদের কাম!</span>
-          <span className="text-2xl">😂💰</span>
+        {/* Mascot & Bespoke Styled Bengali Title */}
+        <div className="flex items-center gap-3">
+          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-tr from-amber-500 to-yellow-300 border-2 border-yellow-200 shadow-xl flex items-center justify-center text-3xl sm:text-4xl shadow-[0_4px_16px_rgba(245,158,11,0.5)] transform -rotate-3">
+            🥷💰
+          </div>
+          <div>
+            <div className="flex items-baseline gap-2">
+              <span className="text-5xl sm:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-amber-400 drop-shadow-[0_4px_10px_rgba(0,0,0,0.8)] tracking-wide">
+                আমরা
+              </span>
+              <span className="text-5xl sm:text-6xl font-black text-red-600 drop-shadow-[0_4px_12px_rgba(220,38,38,0.8)] tracking-wide">
+                চোর
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 text-yellow-300 text-sm sm:text-base font-bold drop-shadow">
+              <span>চোরগিরি করাই আমাদের কাম!</span>
+              <span>😂</span>
+            </div>
+          </div>
         </div>
 
-        <p className="mt-2 text-xs sm:text-sm text-slate-200 bg-slate-950/70 p-3 rounded-xl border border-slate-700/60 max-w-md shadow-md">
-          ঢাকার ব্যস্ত রাজপথ, রিকশার ঘণ্টা, টং দোকানের মালাই চা, কাঁচা বাজারের রূপালী ইলিশ এবং পুলিশের সাথে চোখ ধাঁধানো দৌড়াদৌড়ি!
+        <p className="mt-2.5 text-xs sm:text-sm text-slate-200 bg-slate-950/75 p-2.5 rounded-xl border border-slate-700/60 max-w-md shadow-md">
+          ঢাকার ব্যস্ত রাজপথ, রিকশার টুংটাং ঘণ্টা, টং দোকানের মালাই চা, কাঁচা বাজারের ইলিশ এবং পুলিশের সাথে দুর্দান্ত ধাওয়া!
         </p>
 
-        {/* Menu Buttons Group */}
-        <div className="mt-5 flex flex-col gap-2.5 max-w-xs">
+        {/* Menu Buttons Group - Vertical Stacked Pill Style matching screenshots */}
+        <div className="mt-4 flex flex-col gap-2 max-w-xs">
           <button
             onPointerDown={(e) => {
               e.preventDefault();
@@ -79,37 +91,47 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
               onStartGame();
             }}
             style={{ touchAction: 'manipulation' }}
-            className="w-full flex items-center justify-center gap-3 bg-gradient-to-r from-emerald-600 via-green-500 to-emerald-600 hover:from-emerald-500 hover:to-green-400 text-white font-black text-lg py-3 px-6 rounded-2xl shadow-[0_6px_20px_rgba(16,185,129,0.5)] border-2 border-emerald-300 transform active:scale-95 transition-all cursor-pointer"
+            className="w-full flex items-center justify-center gap-3 bg-gradient-to-r from-emerald-600 via-green-500 to-emerald-600 hover:from-emerald-500 hover:to-green-400 text-white font-black text-base sm:text-lg py-2.5 px-6 rounded-2xl shadow-[0_6px_20px_rgba(16,185,129,0.5)] border-2 border-emerald-300 transform active:scale-95 transition-all cursor-pointer"
           >
-            <Play className="w-6 h-6 fill-white" />
+            <Play className="w-5 h-5 fill-white" />
             <span>খেলা শুরু (PLAY)</span>
           </button>
 
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              onPointerDown={(e) => {
-                e.preventDefault();
-                onOpenMissions();
-              }}
-              style={{ touchAction: 'manipulation' }}
-              className="flex items-center justify-center gap-2 bg-blue-900/80 hover:bg-blue-800 text-blue-200 font-bold py-2.5 px-3 rounded-xl border border-blue-600/50 shadow transition cursor-pointer text-sm active:scale-95"
-            >
-              <Target className="w-4 h-4 text-blue-400" />
-              <span>মিশন সমূহ</span>
-            </button>
+          <button
+            onPointerDown={(e) => {
+              e.preventDefault();
+              onOpenMissions();
+            }}
+            style={{ touchAction: 'manipulation' }}
+            className="w-full flex items-center justify-center gap-2.5 bg-gradient-to-r from-blue-700 to-indigo-800 hover:from-blue-600 hover:to-indigo-700 text-white font-bold py-2 px-4 rounded-xl border border-blue-400/50 shadow transition cursor-pointer text-sm active:scale-95"
+          >
+            <Target className="w-4 h-4 text-cyan-300" />
+            <span>মিশন সমূহ</span>
+          </button>
 
-            <button
-              onPointerDown={(e) => {
-                e.preventDefault();
-                onOpenCharacter();
-              }}
-              style={{ touchAction: 'manipulation' }}
-              className="flex items-center justify-center gap-2 bg-blue-900/80 hover:bg-blue-800 text-blue-200 font-bold py-2.5 px-3 rounded-xl border border-blue-600/50 shadow transition cursor-pointer text-sm active:scale-95"
-            >
-              <User className="w-4 h-4 text-cyan-400" />
-              <span>চরিত্র</span>
-            </button>
-          </div>
+          <button
+            onPointerDown={(e) => {
+              e.preventDefault();
+              onOpenCharacter();
+            }}
+            style={{ touchAction: 'manipulation' }}
+            className="w-full flex items-center justify-center gap-2.5 bg-gradient-to-r from-blue-700 to-indigo-800 hover:from-blue-600 hover:to-indigo-700 text-white font-bold py-2 px-4 rounded-xl border border-blue-400/50 shadow transition cursor-pointer text-sm active:scale-95"
+          >
+            <User className="w-4 h-4 text-cyan-300" />
+            <span>ক্যারেক্টার / পোশাক</span>
+          </button>
+
+          <button
+            onPointerDown={(e) => {
+              e.preventDefault();
+              onOpenSettings();
+            }}
+            style={{ touchAction: 'manipulation' }}
+            className="w-full flex items-center justify-center gap-2.5 bg-gradient-to-r from-blue-700 to-indigo-800 hover:from-blue-600 hover:to-indigo-700 text-white font-bold py-2 px-4 rounded-xl border border-blue-400/50 shadow transition cursor-pointer text-sm active:scale-95"
+          >
+            <Settings className="w-4 h-4 text-cyan-300" />
+            <span>সেটিংস</span>
+          </button>
 
           <div className="grid grid-cols-2 gap-2">
             <button

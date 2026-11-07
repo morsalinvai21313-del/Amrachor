@@ -1,7 +1,7 @@
 /**
- * Amra Chor - Procedural Web Audio Sound Engine
- * All sound effects generated via Web Audio API oscillators and noise buffers.
- * Includes Bengali megaphone announcements and speech synthesis.
+ * Amra Chor - Zero-Latency Procedural Web Audio Sound Engine
+ * All sound effects generated via Web Audio API oscillators and pre-baked noise buffers.
+ * Non-blocking, asynchronous Bengali speech synthesis with voice caching.
  */
 
 class SoundEngine {
@@ -14,15 +14,42 @@ class SoundEngine {
   private sirenLfo: OscillatorNode | null = null;
   private isSirenPlaying: boolean = false;
 
+  private cngOsc: OscillatorNode | null = null;
+  private cngGain: GainNode | null = null;
+
   private megaphoneInterval: number | null = null;
+  private punchNoiseBuffer: AudioBuffer | null = null;
+  private footstepNoiseBuffer: AudioBuffer | null = null;
+
+  // Cached Bengali voices to eliminate main-thread speech blocking
+  private cachedVoices: SpeechSynthesisVoice[] = [];
+  private lastVoiceTime: number = 0;
+  private voiceCooldown: number = 2200; // ms
 
   constructor() {
-    // Lazy initialized on first user interaction
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      const updateVoices = () => {
+        try {
+          this.cachedVoices = window.speechSynthesis.getVoices();
+        } catch {
+          // ignore
+        }
+      };
+      updateVoices();
+      if (window.speechSynthesis.onvoiceschanged !== undefined) {
+        window.speechSynthesis.onvoiceschanged = updateVoices;
+      }
+    }
   }
 
-  private initContext() {
+  public initContext() {
+    if (typeof window === 'undefined') return;
     if (!this.ctx) {
-      const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const AudioContextClass =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (!AudioContextClass) return;
+
       this.ctx = new AudioContextClass();
       this.masterGain = this.ctx.createGain();
       this.sfxGain = this.ctx.createGain();
@@ -30,12 +57,28 @@ class SoundEngine {
       this.masterGain.connect(this.ctx.destination);
       this.sfxGain.connect(this.masterGain);
 
-      this.masterGain.gain.setValueAtTime(0.7, this.ctx.currentTime);
-      this.sfxGain.gain.setValueAtTime(0.8, this.ctx.currentTime);
+      this.masterGain.gain.setValueAtTime(0.75, this.ctx.currentTime);
+      this.sfxGain.gain.setValueAtTime(0.85, this.ctx.currentTime);
+
+      // Pre-bake punch noise buffer (80ms)
+      const pLen = Math.floor(this.ctx.sampleRate * 0.08);
+      this.punchNoiseBuffer = this.ctx.createBuffer(1, pLen, this.ctx.sampleRate);
+      const pData = this.punchNoiseBuffer.getChannelData(0);
+      for (let i = 0; i < pLen; i++) {
+        pData[i] = (Math.random() * 2 - 1) * Math.exp(-i / (pLen * 0.25));
+      }
+
+      // Pre-bake footstep noise buffer (40ms)
+      const fLen = Math.floor(this.ctx.sampleRate * 0.04);
+      this.footstepNoiseBuffer = this.ctx.createBuffer(1, fLen, this.ctx.sampleRate);
+      const fData = this.footstepNoiseBuffer.getChannelData(0);
+      for (let i = 0; i < fLen; i++) {
+        fData[i] = (Math.random() * 2 - 1) * (1 - i / fLen);
+      }
     }
 
-    if (this.ctx.state === 'suspended') {
-      this.ctx.resume();
+    if (this.ctx && this.ctx.state === 'suspended') {
+      this.ctx.resume().catch(() => {});
     }
   }
 
@@ -49,7 +92,7 @@ class SoundEngine {
   public toggleMute(): boolean {
     this.isMuted = !this.isMuted;
     if (this.masterGain && this.ctx) {
-      this.masterGain.gain.setValueAtTime(this.isMuted ? 0 : 0.7, this.ctx.currentTime);
+      this.masterGain.gain.setValueAtTime(this.isMuted ? 0 : 0.75, this.ctx.currentTime);
     }
     return this.isMuted;
   }
@@ -58,55 +101,53 @@ class SoundEngine {
     return this.isMuted;
   }
 
-  // Cartoon Slap / Punch Sound ("ঢিসুম!")
+  // Instant Cartoon Slap / Punch Sound ("ঢিসুম!") - < 1ms execution
   public playPunch() {
     this.initContext();
-    if (!this.ctx || !this.sfxGain) return;
+    if (!this.ctx || !this.sfxGain || this.isMuted) return;
 
     const t = this.ctx.currentTime;
+
+    // Pitch dropping punch body
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
     const filter = this.ctx.createBiquadFilter();
 
     osc.type = 'triangle';
-    osc.frequency.setValueAtTime(180, t);
-    osc.frequency.exponentialRampToValueAtTime(35, t + 0.18);
+    osc.frequency.setValueAtTime(220, t);
+    osc.frequency.exponentialRampToValueAtTime(38, t + 0.16);
 
     filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(800, t);
+    filter.frequency.setValueAtTime(850, t);
 
     gain.gain.setValueAtTime(0.9, t);
-    gain.gain.exponentialRampToValueAtTime(0.01, t + 0.18);
-
-    // Punch white noise crack
-    const bufferSize = this.ctx.sampleRate * 0.08;
-    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-      data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.2));
-    }
-    const noise = this.ctx.createBufferSource();
-    noise.buffer = buffer;
-    const noiseGain = this.ctx.createGain();
-    noiseGain.gain.setValueAtTime(0.6, t);
-    noiseGain.gain.exponentialRampToValueAtTime(0.01, t + 0.08);
-
-    noise.connect(noiseGain);
-    noiseGain.connect(this.sfxGain);
-    noise.start(t);
+    gain.gain.exponentialRampToValueAtTime(0.01, t + 0.16);
 
     osc.connect(filter);
     filter.connect(gain);
     gain.connect(this.sfxGain);
 
     osc.start(t);
-    osc.stop(t + 0.2);
+    osc.stop(t + 0.17);
+
+    // Punch transient noise crack using pre-baked buffer
+    if (this.punchNoiseBuffer) {
+      const noise = this.ctx.createBufferSource();
+      noise.buffer = this.punchNoiseBuffer;
+      const noiseGain = this.ctx.createGain();
+      noiseGain.gain.setValueAtTime(0.65, t);
+      noiseGain.gain.exponentialRampToValueAtTime(0.01, t + 0.08);
+
+      noise.connect(noiseGain);
+      noiseGain.connect(this.sfxGain);
+      noise.start(t);
+    }
   }
 
   // Rickshaw Bell ("টিং টিং!")
   public playRickshawBell() {
     this.initContext();
-    if (!this.ctx || !this.sfxGain) return;
+    if (!this.ctx || !this.sfxGain || this.isMuted) return;
 
     const chime = (delay: number, freq: number) => {
       if (!this.ctx || !this.sfxGain) return;
@@ -117,13 +158,13 @@ class SoundEngine {
       osc.type = 'sine';
       osc.frequency.setValueAtTime(freq, t);
 
-      gain.gain.setValueAtTime(0.4, t);
+      gain.gain.setValueAtTime(0.45, t);
       gain.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
 
       osc.connect(gain);
       gain.connect(this.sfxGain);
       osc.start(t);
-      osc.stop(t + 0.25);
+      osc.stop(t + 0.23);
     };
 
     chime(0, 1950);
@@ -133,7 +174,7 @@ class SoundEngine {
   // Dhaka Car / Bus Horn ("প্যাঁ প্যাঁ!")
   public playHorn() {
     this.initContext();
-    if (!this.ctx || !this.sfxGain) return;
+    if (!this.ctx || !this.sfxGain || this.isMuted) return;
 
     const t = this.ctx.currentTime;
     const osc1 = this.ctx.createOscillator();
@@ -142,12 +183,12 @@ class SoundEngine {
 
     osc1.type = 'sawtooth';
     osc2.type = 'sawtooth';
-    osc1.frequency.setValueAtTime(370, t);
-    osc2.frequency.setValueAtTime(460, t);
+    osc1.frequency.setValueAtTime(380, t);
+    osc2.frequency.setValueAtTime(475, t);
 
-    gain.gain.setValueAtTime(0.35, t);
-    gain.gain.setValueAtTime(0.35, t + 0.25);
-    gain.gain.exponentialRampToValueAtTime(0.01, t + 0.3);
+    gain.gain.setValueAtTime(0.4, t);
+    gain.gain.setValueAtTime(0.4, t + 0.22);
+    gain.gain.exponentialRampToValueAtTime(0.01, t + 0.28);
 
     osc1.connect(gain);
     osc2.connect(gain);
@@ -155,14 +196,14 @@ class SoundEngine {
 
     osc1.start(t);
     osc2.start(t);
-    osc1.stop(t + 0.3);
-    osc2.stop(t + 0.3);
+    osc1.stop(t + 0.29);
+    osc2.stop(t + 0.29);
   }
 
   // Money Coin / Cash Pickup ("খন খন!")
   public playCoin() {
     this.initContext();
-    if (!this.ctx || !this.sfxGain) return;
+    if (!this.ctx || !this.sfxGain || this.isMuted) return;
 
     const t = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
@@ -170,62 +211,56 @@ class SoundEngine {
 
     osc.type = 'sine';
     osc.frequency.setValueAtTime(987, t); // B5
-    osc.frequency.setValueAtTime(1318, t + 0.08); // E6
+    osc.frequency.setValueAtTime(1318, t + 0.07); // E6
 
-    gain.gain.setValueAtTime(0.3, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+    gain.gain.setValueAtTime(0.35, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.32);
 
     osc.connect(gain);
     gain.connect(this.sfxGain);
 
     osc.start(t);
-    osc.stop(t + 0.35);
+    osc.stop(t + 0.33);
   }
 
-  // Jump Sound
+  // Responsive Jump Sound
   public playJump() {
     this.initContext();
-    if (!this.ctx || !this.sfxGain) return;
+    if (!this.ctx || !this.sfxGain || this.isMuted) return;
 
     const t = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
 
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(150, t);
-    osc.frequency.exponentialRampToValueAtTime(420, t + 0.15);
+    osc.frequency.setValueAtTime(160, t);
+    osc.frequency.exponentialRampToValueAtTime(450, t + 0.14);
 
-    gain.gain.setValueAtTime(0.25, t);
-    gain.gain.exponentialRampToValueAtTime(0.01, t + 0.18);
+    gain.gain.setValueAtTime(0.28, t);
+    gain.gain.exponentialRampToValueAtTime(0.01, t + 0.16);
 
     osc.connect(gain);
     gain.connect(this.sfxGain);
 
     osc.start(t);
-    osc.stop(t + 0.2);
+    osc.stop(t + 0.17);
   }
 
-  // Footstep Sound
+  // Rapid Footstep Sound using pre-baked buffer
   public playFootstep(isSprinting: boolean) {
     this.initContext();
-    if (!this.ctx || !this.sfxGain) return;
+    if (!this.ctx || !this.sfxGain || this.isMuted || !this.footstepNoiseBuffer) return;
 
     const t = this.ctx.currentTime;
-    const bufferSize = this.ctx.sampleRate * 0.04;
-    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-      data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
-    }
     const noise = this.ctx.createBufferSource();
-    noise.buffer = buffer;
+    noise.buffer = this.footstepNoiseBuffer;
 
     const filter = this.ctx.createBiquadFilter();
     filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(isSprinting ? 600 : 400, t);
+    filter.frequency.setValueAtTime(isSprinting ? 650 : 420, t);
 
     const gain = this.ctx.createGain();
-    gain.gain.setValueAtTime(isSprinting ? 0.18 : 0.1, t);
+    gain.gain.setValueAtTime(isSprinting ? 0.16 : 0.09, t);
     gain.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
 
     noise.connect(filter);
@@ -235,13 +270,42 @@ class SoundEngine {
     noise.start(t);
   }
 
-  // CNG Engine Drone / Accel Sound
-  private cngOsc: OscillatorNode | null = null;
-  private cngGain: GainNode | null = null;
-
-  public setCngEngine(active: boolean, speedNorm: number = 0) {
+  // Police Whistle
+  public playPoliceWhistle() {
     this.initContext();
-    if (!this.ctx || !this.sfxGain) return;
+    if (!this.ctx || !this.sfxGain || this.isMuted) return;
+
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const lfo = this.ctx.createOscillator();
+    const lfoGain = this.ctx.createGain();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(2400, t);
+
+    lfo.frequency.setValueAtTime(25, t); // 25 Hz flutter trill
+    lfoGain.gain.setValueAtTime(120, t);
+
+    lfo.connect(lfoGain);
+    lfoGain.connect(osc.frequency);
+
+    gain.gain.setValueAtTime(0.25, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+
+    osc.connect(gain);
+    gain.connect(this.sfxGain);
+
+    lfo.start(t);
+    osc.start(t);
+    lfo.stop(t + 0.3);
+    osc.stop(t + 0.3);
+  }
+
+  // CNG Engine Drone / Accel Sound
+  public setCngEngine(active: boolean, speedNorm = 0) {
+    this.initContext();
+    if (!this.ctx || !this.sfxGain || this.isMuted) return;
 
     if (active) {
       if (!this.cngOsc) {
@@ -254,9 +318,9 @@ class SoundEngine {
         this.cngOsc.start();
       }
       if (this.cngOsc && this.cngGain && this.ctx) {
-        const freq = 65 + speedNorm * 110;
-        this.cngOsc.frequency.setTargetAtTime(freq, this.ctx.currentTime, 0.1);
-        this.cngGain.gain.setTargetAtTime(0.1 + speedNorm * 0.08, this.ctx.currentTime, 0.1);
+        const freq = 65 + speedNorm * 115;
+        this.cngOsc.frequency.setTargetAtTime(freq, this.ctx.currentTime, 0.08);
+        this.cngGain.gain.setTargetAtTime(0.1 + speedNorm * 0.08, this.ctx.currentTime, 0.08);
       }
     } else {
       if (this.cngOsc) {
@@ -320,25 +384,44 @@ class SoundEngine {
     }
   }
 
-  // Bengali Voiceover / Speech Synthesis for comical dialogues
+  // Non-blocking, Async Bengali Voiceover / Speech Synthesis
+  // Debounced with zero main-thread block
   public speakBengali(text: string, pitch = 1.1, rate = 1.05) {
-    if (!('speechSynthesis' in window)) return;
-    try {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.pitch = pitch;
-      utterance.rate = rate;
-      utterance.volume = this.isMuted ? 0 : 0.9;
+    if (this.isMuted) return;
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
 
-      const voices = window.speechSynthesis.getVoices();
-      const bengaliVoice = voices.find(v => v.lang.includes('bn') || v.lang.includes('bd') || v.lang.includes('in'));
-      if (bengaliVoice) {
-        utterance.voice = bengaliVoice;
-      }
-      window.speechSynthesis.speak(utterance);
-    } catch {
-      // Graceful fallback
+    const now = performance.now();
+    if (now - this.lastVoiceTime < this.voiceCooldown) {
+      return; // Debounce rapid speech requests to keep device responsive
     }
+    this.lastVoiceTime = now;
+
+    // Run completely decoupled from current frame
+    setTimeout(() => {
+      try {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.pitch = pitch;
+        utterance.rate = rate;
+        utterance.volume = 0.85;
+
+        // Use pre-cached voices - NEVER call getVoices() synchronously on touch
+        const voices = this.cachedVoices.length > 0 ? this.cachedVoices : window.speechSynthesis.getVoices();
+        const bengaliVoice = voices.find(
+          (v) =>
+            v.lang.toLowerCase().includes('bn') ||
+            v.lang.toLowerCase().includes('bd') ||
+            v.lang.toLowerCase().includes('in')
+        );
+        if (bengaliVoice) {
+          utterance.voice = bengaliVoice;
+        }
+
+        window.speechSynthesis.speak(utterance);
+      } catch {
+        // Graceful non-blocking fallback
+      }
+    }, 10);
   }
 
   // Start background Dhaka street announcements on megaphone
@@ -350,7 +433,7 @@ class SoundEngine {
       'ভাই ভাই মিষ্টির দোকানে গরম জিলাপি ও চমচম পাওয়া যাচ্ছে!',
       'সাবধান! এলাকায় চোরের উৎপাত বেড়েছে!',
       'মায়ের দোয়া রিকশা গ্যারেজ, নতুন সিট কভার পাওয়া যায়!',
-      'পুলিশের জরুরি ঘোষণা: সন্দেহভাজন চোর দেখলে পুলিশে খবর দিন!',
+      'জরুরি ঘোষণা: সন্দেহভাজন চোর দেখলে পুলিশে খবর দিন!',
     ];
 
     let index = 0;
@@ -360,7 +443,7 @@ class SoundEngine {
         this.speakBengali(text, 1.25, 1.1);
         index++;
       }
-    }, 28000);
+    }, 32000);
   }
 
   public stopDhakaMegaphone() {
@@ -375,7 +458,7 @@ class SoundEngine {
     this.setPoliceSiren(false);
     this.setCngEngine(false);
     if (this.ctx && this.ctx.state !== 'closed') {
-      this.ctx.close();
+      this.ctx.close().catch(() => {});
     }
   }
 }

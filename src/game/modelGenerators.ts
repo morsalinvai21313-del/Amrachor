@@ -2,11 +2,14 @@ import * as THREE from 'three';
 import {
   createRichShopBanner,
   createBuildingFacadeTexture,
-  createDetailedRoadTexture,
-  createFootpathTexture,
   createBusSideTexture,
   createRichRickshawArt,
+  createCNGDetailsTexture,
+  createPoliceLiveryTexture,
   createHumanFaceTexture,
+  createPlaidTrousersTexture,
+  createTShirtStripesTexture,
+  createShopShelvesTexture,
   createVegFishBoxTexture,
 } from './proceduralTextures';
 
@@ -18,14 +21,20 @@ export interface CharacterRig {
   rightArm: THREE.Group;
   leftForearm: THREE.Group;
   rightForearm: THREE.Group;
+  leftHand?: THREE.Group;
+  rightHand?: THREE.Group;
   leftLeg: THREE.Group;
   rightLeg: THREE.Group;
   leftCalf: THREE.Group;
   rightCalf: THREE.Group;
+  leftFoot?: THREE.Group;
+  rightFoot?: THREE.Group;
   moneySack?: THREE.Group;
   baton?: THREE.Mesh;
   animTime: number;
   archetype?: string;
+  isKnockedDown?: boolean;
+  knockDownTimer?: number;
 }
 
 export interface VehicleRig {
@@ -33,436 +42,494 @@ export interface VehicleRig {
   wheels: THREE.Mesh[];
   sirenLights?: THREE.PointLight[];
   headlights?: THREE.SpotLight[];
-  vehicleType: 'CNG' | 'RICKSHAW' | 'BUS' | 'POLICE_CAR';
+  vehicleType: 'CNG' | 'RICKSHAW' | 'BUS' | 'CAR' | 'BIKE' | 'POLICE_CAR';
   speed: number;
   steerAngle: number;
 }
 
+// Reusable Shared Geometries & Materials (Extreme Memory & GPU Optimization)
+const sharedGeos = {
+  wheelTire: new THREE.CylinderGeometry(0.38, 0.38, 0.22, 16),
+  wheelRim: new THREE.CylinderGeometry(0.24, 0.24, 0.24, 16),
+  rickshawWheel: new THREE.CylinderGeometry(0.48, 0.48, 0.05, 18),
+  limbUpper: new THREE.CylinderGeometry(0.08, 0.07, 0.38, 10),
+  limbLower: new THREE.CylinderGeometry(0.07, 0.06, 0.38, 10),
+  jointSphere: new THREE.SphereGeometry(0.075, 8, 8),
+  sneaker: new THREE.BoxGeometry(0.11, 0.08, 0.22),
+  waterTank: new THREE.CylinderGeometry(0.85, 0.85, 1.6, 12),
+};
+
+sharedGeos.wheelTire.rotateZ(Math.PI / 2);
+sharedGeos.wheelRim.rotateZ(Math.PI / 2);
+sharedGeos.rickshawWheel.rotateZ(Math.PI / 2);
+
+const sharedMats = {
+  blackRubber: new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: 0.9 }),
+  silverRim: new THREE.MeshStandardMaterial({ color: 0xd4d4d8, metalness: 0.8, roughness: 0.25 }),
+  goldMetal: new THREE.MeshStandardMaterial({ color: 0xeab308, metalness: 0.85, roughness: 0.2 }),
+  glass: new THREE.MeshPhysicalMaterial({
+    color: 0x38bdf8,
+    transparent: true,
+    opacity: 0.5,
+    roughness: 0.1,
+    metalness: 0.1,
+  }),
+  headlightLens: new THREE.MeshBasicMaterial({ color: 0xfef08a }),
+  taillightLens: new THREE.MeshBasicMaterial({ color: 0xef4444 }),
+  policeBlueLight: new THREE.MeshBasicMaterial({ color: 0x3b82f6 }),
+  cngGreen: new THREE.MeshStandardMaterial({ color: 0x15803d, metalness: 0.35, roughness: 0.35 }),
+  cngCanopyBlack: new THREE.MeshStandardMaterial({ color: 0x09090b, roughness: 0.85 }),
+  chrome: new THREE.MeshStandardMaterial({ color: 0xf1f5f9, metalness: 0.95, roughness: 0.1 }),
+  wood: new THREE.MeshStandardMaterial({ color: 0x5c2b0c, roughness: 0.85 }),
+  whiteSneaker: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 }),
+};
+
 // 1. High-Fidelity Hero Thief Character Model ("আমরা চোর")
+// Natural Human Body Proportions, Expressive Face, Aviator Sunglasses, Striped T-Shirt, Plaid Trousers, Sneakers, Money Sack
 export function createThiefModel(): CharacterRig {
   const root = new THREE.Group();
-  root.name = 'Thief_Player';
+  root.name = 'Hero_Thief_Player';
 
-  // Realistic human skin tone
   const skinMat = new THREE.MeshStandardMaterial({
     color: 0xc87d55, // Bengali warm skin tone
-    roughness: 0.65,
-    metalness: 0.05,
+    roughness: 0.55,
   });
-
-  // Black and White Striped Fabric T-Shirt Material
-  const stripeCanvas = document.createElement('canvas');
-  stripeCanvas.width = 128;
-  stripeCanvas.height = 128;
-  const sCtx = stripeCanvas.getContext('2d')!;
-  sCtx.fillStyle = '#f8fafc';
-  sCtx.fillRect(0, 0, 128, 128);
-  sCtx.fillStyle = '#0f172a';
-  for (let y = 0; y < 128; y += 32) sCtx.fillRect(0, y, 128, 16);
-  const stripeTex = new THREE.CanvasTexture(stripeCanvas);
-  stripeTex.wrapS = THREE.RepeatWrapping;
-  stripeTex.wrapT = THREE.RepeatWrapping;
-  stripeTex.repeat.set(1, 4);
 
   const shirtMat = new THREE.MeshStandardMaterial({
-    map: stripeTex,
-    roughness: 0.7,
+    map: createTShirtStripesTexture(),
+    roughness: 0.65,
   });
 
-  // Blue Checked Lungi Material
-  const lungiCanvas = document.createElement('canvas');
-  lungiCanvas.width = 128;
-  lungiCanvas.height = 128;
-  const lCtx = lungiCanvas.getContext('2d')!;
-  lCtx.fillStyle = '#1e3a8a';
-  lCtx.fillRect(0, 0, 128, 128);
-  lCtx.fillStyle = 'rgba(56, 189, 248, 0.45)';
-  for (let x = 0; x < 128; x += 16) lCtx.fillRect(x, 0, 8, 128);
-  for (let y = 0; y < 128; y += 16) lCtx.fillRect(0, y, 128, 8);
-  const lungiTex = new THREE.CanvasTexture(lungiCanvas);
-  lungiTex.wrapS = THREE.RepeatWrapping;
-  lungiTex.wrapT = THREE.RepeatWrapping;
-  lungiTex.repeat.set(2, 4);
-
-  const lungiMat = new THREE.MeshStandardMaterial({
-    map: lungiTex,
-    roughness: 0.8,
+  const pantsMat = new THREE.MeshStandardMaterial({
+    map: createPlaidTrousersTexture(),
+    roughness: 0.75,
   });
 
-  const shoeMat = new THREE.MeshStandardMaterial({
-    color: 0x1e293b,
-    roughness: 0.5,
-  });
-
-  const shadesMat = new THREE.MeshPhysicalMaterial({
-    color: 0x0a0a0c,
-    metalness: 0.9,
-    roughness: 0.1,
-    clearcoat: 1.0,
-  });
-
-  // Pelvis Anchor
+  // Pelvis / Hips
   const pelvis = new THREE.Group();
   pelvis.position.y = 0.95;
   root.add(pelvis);
 
-  // Upper Torso / Chest with shoulder taper
+  // Torso / Chest with natural muscular taper
   const torso = new THREE.Group();
-  torso.position.y = 0.05;
   pelvis.add(torso);
 
-  const chestGeo = new THREE.CylinderGeometry(0.24, 0.20, 0.58, 12);
-  const chestMesh = new THREE.Mesh(chestGeo, shirtMat);
-  chestMesh.position.y = 0.3;
-  chestMesh.castShadow = true;
-  torso.add(chestMesh);
+  const chest = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.18, 0.58, 12), shirtMat);
+  chest.position.y = 0.29;
+  chest.castShadow = true;
+  torso.add(chest);
 
-  // Clavicle & Neck
+  // Crew Neck Collar
+  const collar = new THREE.Mesh(
+    new THREE.TorusGeometry(0.12, 0.02, 8, 16),
+    new THREE.MeshStandardMaterial({ color: 0x09090b, roughness: 0.9 })
+  );
+  collar.rotation.x = Math.PI / 2;
+  collar.position.set(0, 0.58, 0);
+  torso.add(collar);
+
+  // Neck
   const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.09, 0.14, 10), skinMat);
-  neck.position.y = 0.62;
+  neck.position.y = 0.64;
   torso.add(neck);
 
   // Head Group
   const head = new THREE.Group();
-  head.position.y = 0.76;
+  head.position.y = 0.82;
   torso.add(head);
 
-  // Sculpted Head & Face with jawline
+  // Sculpted Head & Face with jawline and chin
   const faceTex = createHumanFaceTexture('#c87d55', false, false);
-  const headGeo = new THREE.SphereGeometry(0.18, 16, 14);
-  headGeo.scale(1, 1.15, 0.95);
-  const headMat = new THREE.MeshStandardMaterial({
-    map: faceTex,
-    roughness: 0.65,
-  });
-  const headMesh = new THREE.Mesh(headGeo, headMat);
+  const headMesh = new THREE.Mesh(
+    new THREE.SphereGeometry(0.18, 16, 14),
+    new THREE.MeshStandardMaterial({ map: faceTex, roughness: 0.55 })
+  );
+  headMesh.scale.set(1, 1.15, 0.95);
   headMesh.castShadow = true;
   head.add(headMesh);
 
-  // Thief Beanie Cap
-  const beanieGeo = new THREE.SphereGeometry(0.19, 14, 12, 0, Math.PI * 2, 0, Math.PI * 0.58);
-  const beanieMat = new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: 0.9 });
-  const beanie = new THREE.Mesh(beanieGeo, beanieMat);
-  beanie.position.y = 0.04;
-  head.add(beanie);
+  // 3D Ears
+  const earL = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 8), skinMat);
+  earL.scale.set(0.5, 1, 0.8);
+  earL.position.set(-0.19, 0, 0);
+  head.add(earL);
 
-  // Dark Sunglasses (Thief signature look)
-  const shadesFrame = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.065, 0.06), shadesMat);
-  shadesFrame.position.set(0, 0.02, 0.165);
-  head.add(shadesFrame);
+  const earR = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 8), skinMat);
+  earR.scale.set(0.5, 1, 0.8);
+  earR.position.set(0.19, 0, 0);
+  head.add(earR);
 
-  // Metallic gold frame rims
-  const goldRimMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.9, roughness: 0.2 });
-  const rimL = new THREE.Mesh(new THREE.TorusGeometry(0.045, 0.008, 8, 16), goldRimMat);
-  rimL.position.set(-0.06, 0.02, 0.18);
-  head.add(rimL);
-  const rimR = new THREE.Mesh(new THREE.TorusGeometry(0.045, 0.008, 8, 16), goldRimMat);
-  rimR.position.set(0.06, 0.02, 0.18);
-  head.add(rimR);
+  // Voluminous Styled Black Hair (Side parting with stylish bangs)
+  const hairGroup = new THREE.Group();
+  const hairMat = new THREE.MeshStandardMaterial({ color: 0x09090b, roughness: 0.85 });
 
-  // Left Arm (Shoulder -> Bicep -> Elbow -> Forearm -> Hand)
-  const leftArm = new THREE.Group();
-  leftArm.position.set(-0.28, 0.52, 0);
-  torso.add(leftArm);
+  const hairTop = new THREE.Mesh(
+    new THREE.SphereGeometry(0.2, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.55),
+    hairMat
+  );
+  hairTop.position.set(0, 0.06, -0.01);
+  hairGroup.add(hairTop);
 
-  const lBicep = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.06, 0.28, 8), shirtMat);
-  lBicep.position.y = -0.14;
-  lBicep.castShadow = true;
-  leftArm.add(lBicep);
+  // Front stylish bangs
+  const bangs = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.08, 0.06), hairMat);
+  bangs.rotation.z = -0.15;
+  bangs.position.set(-0.04, 0.15, 0.14);
+  hairGroup.add(bangs);
+  head.add(hairGroup);
 
-  const leftForearm = new THREE.Group();
-  leftForearm.position.set(0, -0.28, 0);
-  leftArm.add(leftForearm);
-
-  const lForearmMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.058, 0.05, 0.26, 8), skinMat);
-  lForearmMesh.position.y = -0.13;
-  leftForearm.add(lForearmMesh);
-
-  // Left Hand
-  const lHand = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 8), skinMat);
-  lHand.position.y = -0.28;
-  leftForearm.add(lHand);
-
-  // Burlap Money Sack with "৳" stamped on it held in left hand
-  const moneySack = new THREE.Group();
-  moneySack.position.set(0, -0.18, 0.1);
-  lHand.add(moneySack);
-
-  const sackGeo = new THREE.SphereGeometry(0.24, 12, 12);
-  sackGeo.scale(1, 1.35, 0.9);
-  const sackMat = new THREE.MeshStandardMaterial({
-    color: 0xd97706,
-    roughness: 0.85,
-    metalness: 0.1,
+  // Dark Aviator Sunglasses (চশমা)
+  const glasses = new THREE.Group();
+  const frameMat = new THREE.MeshStandardMaterial({ color: 0x09090b, metalness: 0.9, roughness: 0.1 });
+  const lensMat = new THREE.MeshPhysicalMaterial({
+    color: 0x09090b,
+    metalness: 0.95,
+    roughness: 0.05,
+    clearcoat: 1.0,
   });
-  const sackMesh = new THREE.Mesh(sackGeo, sackMat);
+
+  const lensL = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.06, 0.02), lensMat);
+  lensL.position.set(-0.06, 0.02, 0.18);
+  glasses.add(lensL);
+
+  const lensR = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.06, 0.02), lensMat);
+  lensR.position.set(0.06, 0.02, 0.18);
+  glasses.add(lensR);
+
+  const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.012, 0.02), frameMat);
+  bridge.position.set(0, 0.03, 0.18);
+  glasses.add(bridge);
+  head.add(glasses);
+
+  // Articulated Arms with Shoulder Caps, Elbows, and Sculpted Hands
+  const makeArm = (isRight: boolean) => {
+    const shoulder = new THREE.Group();
+    shoulder.position.set(isRight ? 0.28 : -0.28, 0.52, 0);
+
+    // Shoulder cap
+    const cap = new THREE.Mesh(sharedGeos.jointSphere, shirtMat);
+    shoulder.add(cap);
+
+    // Upper arm (Short sleeve + bare arm)
+    const upper = new THREE.Mesh(sharedGeos.limbUpper, shirtMat);
+    upper.position.y = -0.19;
+    upper.castShadow = true;
+    shoulder.add(upper);
+
+    // Elbow Joint
+    const forearm = new THREE.Group();
+    forearm.position.y = -0.38;
+    shoulder.add(forearm);
+
+    const elbow = new THREE.Mesh(sharedGeos.jointSphere, skinMat);
+    forearm.add(elbow);
+
+    // Forearm
+    const lower = new THREE.Mesh(sharedGeos.limbLower, skinMat);
+    lower.position.y = -0.19;
+    lower.castShadow = true;
+    forearm.add(lower);
+
+    // Wristband
+    const band = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.065, 0.065, 0.03, 8),
+      new THREE.MeshStandardMaterial({ color: 0x0f172a })
+    );
+    band.position.y = -0.36;
+    forearm.add(band);
+
+    // Hand with distinct thumb & fingers
+    const hand = new THREE.Group();
+    hand.position.y = -0.42;
+
+    const palm = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.09, 0.04), skinMat);
+    palm.position.y = -0.04;
+    hand.add(palm);
+
+    const thumb = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.05, 0.025), skinMat);
+    thumb.position.set(isRight ? -0.04 : 0.04, -0.03, 0.02);
+    hand.add(thumb);
+
+    forearm.add(hand);
+    torso.add(shoulder);
+    return { shoulder, forearm, hand };
+  };
+
+  const leftArmData = makeArm(false);
+  const rightArmData = makeArm(true);
+
+  // Articulated Legs with Plaid Trousers, Knee Joints, and White Sneakers
+  const makeLeg = (isRight: boolean) => {
+    const hip = new THREE.Group();
+    hip.position.set(isRight ? 0.12 : -0.12, 0, 0);
+
+    const hipJoint = new THREE.Mesh(sharedGeos.jointSphere, pantsMat);
+    hip.add(hipJoint);
+
+    const thigh = new THREE.Mesh(sharedGeos.limbUpper, pantsMat);
+    thigh.position.y = -0.19;
+    thigh.castShadow = true;
+    hip.add(thigh);
+
+    const calf = new THREE.Group();
+    calf.position.y = -0.38;
+    hip.add(calf);
+
+    const knee = new THREE.Mesh(sharedGeos.jointSphere, pantsMat);
+    calf.add(knee);
+
+    const shin = new THREE.Mesh(sharedGeos.limbLower, pantsMat);
+    shin.position.y = -0.19;
+    shin.castShadow = true;
+    calf.add(shin);
+
+    // Trousers rolled cuff
+    const cuff = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.075, 0.075, 0.04, 8),
+      new THREE.MeshStandardMaterial({ color: 0x0369a1, roughness: 0.8 })
+    );
+    cuff.position.y = -0.36;
+    calf.add(cuff);
+
+    // White Sneaker with Black Laces & Sole
+    const foot = new THREE.Group();
+    foot.position.y = -0.42;
+
+    const sneaker = new THREE.Mesh(sharedGeos.sneaker, sharedMats.whiteSneaker);
+    sneaker.position.set(0, -0.02, 0.05);
+    sneaker.castShadow = true;
+    foot.add(sneaker);
+
+    // Black Laces detailing
+    const laces = new THREE.Mesh(
+      new THREE.BoxGeometry(0.07, 0.02, 0.1),
+      new THREE.MeshStandardMaterial({ color: 0x09090b })
+    );
+    laces.position.set(0, 0.03, 0.04);
+    foot.add(laces);
+
+    calf.add(foot);
+    pelvis.add(hip);
+    return { hip, calf, foot };
+  };
+
+  const leftLegData = makeLeg(false);
+  const rightLegData = makeLeg(true);
+
+  // Round Burlap Money Sack slung on back with Bengali Taka Symbol ৳
+  const moneySack = new THREE.Group();
+  moneySack.position.set(0.14, 0.35, -0.24);
+
+  const sackMesh = new THREE.Mesh(
+    new THREE.SphereGeometry(0.24, 12, 10),
+    new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.9 })
+  );
+  sackMesh.scale.set(0.9, 1.25, 0.85);
   sackMesh.castShadow = true;
   moneySack.add(sackMesh);
 
-  // Taka "৳" symbol on sack
-  const takaCanvas = document.createElement('canvas');
-  takaCanvas.width = 128;
-  takaCanvas.height = 128;
-  const tCtx = takaCanvas.getContext('2d')!;
+  // Tied Rope knot at top of sack
+  const rope = new THREE.Mesh(
+    new THREE.TorusGeometry(0.07, 0.02, 6, 12),
+    new THREE.MeshStandardMaterial({ color: 0x78350f })
+  );
+  rope.position.set(0, 0.26, 0);
+  moneySack.add(rope);
+
+  // Bengali ৳ Symbol badge on sack
+  const canvasTaka = document.createElement('canvas');
+  canvasTaka.width = 64;
+  canvasTaka.height = 64;
+  const tCtx = canvasTaka.getContext('2d')!;
   tCtx.fillStyle = '#0f172a';
+  tCtx.font = 'bold 44px "Hind Siliguri", sans-serif';
   tCtx.textAlign = 'center';
   tCtx.textBaseline = 'middle';
-  tCtx.font = 'bold 90px "Hind Siliguri", sans-serif';
-  tCtx.fillText('৳', 64, 64);
-  const takaTex = new THREE.CanvasTexture(takaCanvas);
-  const takaDecal = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.28, 0.28),
+  tCtx.fillText('৳', 32, 34);
+  const takaTex = new THREE.CanvasTexture(canvasTaka);
+  const takaBadge = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.2, 0.2),
     new THREE.MeshBasicMaterial({ map: takaTex, transparent: true })
   );
-  takaDecal.position.set(0, 0, 0.23);
-  moneySack.add(takaDecal);
-
-  // Right Arm (Punch / Action Arm)
-  const rightArm = new THREE.Group();
-  rightArm.position.set(0.28, 0.52, 0);
-  torso.add(rightArm);
-
-  const rBicep = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.06, 0.28, 8), shirtMat);
-  rBicep.position.y = -0.14;
-  rBicep.castShadow = true;
-  rightArm.add(rBicep);
-
-  const rightForearm = new THREE.Group();
-  rightForearm.position.set(0, -0.28, 0);
-  rightArm.add(rightForearm);
-
-  const rForearmMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.058, 0.05, 0.26, 8), skinMat);
-  rForearmMesh.position.y = -0.13;
-  rightForearm.add(rForearmMesh);
-
-  const rHand = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), skinMat);
-  rHand.position.y = -0.28;
-  rightForearm.add(rHand);
-
-  // Left Leg (Hip -> Thigh -> Knee -> Calf -> Shoe)
-  const leftLeg = new THREE.Group();
-  leftLeg.position.set(-0.13, 0, 0);
-  pelvis.add(leftLeg);
-
-  const lThigh = new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.08, 0.42, 8), lungiMat);
-  lThigh.position.y = -0.21;
-  lThigh.castShadow = true;
-  leftLeg.add(lThigh);
-
-  const leftCalf = new THREE.Group();
-  leftCalf.position.set(0, -0.42, 0);
-  leftLeg.add(leftCalf);
-
-  const lCalfMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.078, 0.068, 0.42, 8), lungiMat);
-  lCalfMesh.position.y = -0.21;
-  lCalfMesh.castShadow = true;
-  leftCalf.add(lCalfMesh);
-
-  const lShoe = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.09, 0.24), shoeMat);
-  lShoe.position.set(0, -0.45, 0.04);
-  lShoe.castShadow = true;
-  leftCalf.add(lShoe);
-
-  // Right Leg
-  const rightLeg = new THREE.Group();
-  rightLeg.position.set(0.13, 0, 0);
-  pelvis.add(rightLeg);
-
-  const rThigh = new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.08, 0.42, 8), lungiMat);
-  rThigh.position.y = -0.21;
-  rThigh.castShadow = true;
-  rightLeg.add(rThigh);
-
-  const rightCalf = new THREE.Group();
-  rightCalf.position.set(0, -0.42, 0);
-  rightLeg.add(rightCalf);
-
-  const rCalfMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.078, 0.068, 0.42, 8), lungiMat);
-  rCalfMesh.position.y = -0.21;
-  rCalfMesh.castShadow = true;
-  rightCalf.add(rCalfMesh);
-
-  const rShoe = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.09, 0.24), shoeMat);
-  rShoe.position.set(0, -0.45, 0.04);
-  rShoe.castShadow = true;
-  rightCalf.add(rShoe);
+  takaBadge.position.set(0, 0, 0.21);
+  moneySack.add(takaBadge);
+  torso.add(moneySack);
 
   return {
     root,
     torso,
     head,
-    leftArm,
-    rightArm,
-    leftForearm,
-    rightForearm,
-    leftLeg,
-    rightLeg,
-    leftCalf,
-    rightCalf,
+    leftArm: leftArmData.shoulder,
+    rightArm: rightArmData.shoulder,
+    leftForearm: leftArmData.forearm,
+    rightForearm: rightArmData.forearm,
+    leftHand: leftArmData.hand,
+    rightHand: rightArmData.hand,
+    leftLeg: leftLegData.hip,
+    rightLeg: rightLegData.hip,
+    leftCalf: leftLegData.calf,
+    rightCalf: rightLegData.calf,
+    leftFoot: leftLegData.foot,
+    rightFoot: rightLegData.foot,
     moneySack,
     animTime: 0,
-    archetype: 'THIEF',
+    archetype: 'HERO_THIEF',
   };
 }
 
-// 2. High Quality Police Officer Model (বাংলাদেশ পুলিশ)
+// 2. Bangladesh Police Officer Character Model (বাংলাদেশ পুলিশ)
 export function createPoliceModel(): CharacterRig {
   const root = new THREE.Group();
   root.name = 'Police_Officer';
 
-  const uniformMat = new THREE.MeshStandardMaterial({
-    color: 0x1e3a8a, // Navy police uniform
-    roughness: 0.6,
-  });
-
-  const skinMat = new THREE.MeshStandardMaterial({ color: 0xba7651, roughness: 0.7 });
-  const faceTex = createHumanFaceTexture('#ba7651', true, false);
-  const faceMat = new THREE.MeshStandardMaterial({ map: faceTex, roughness: 0.7 });
-  const beltMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.4 });
-  const goldMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.8, roughness: 0.2 });
-  const batonMat = new THREE.MeshStandardMaterial({ color: 0x3f1c04, roughness: 0.4 });
+  const skinMat = new THREE.MeshStandardMaterial({ color: 0xbf7854, roughness: 0.6 });
+  const uniformMat = new THREE.MeshStandardMaterial({ color: 0x1e3a8a, roughness: 0.65 }); // Deep Bangladesh police blue
+  const beltMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.3, metalness: 0.5 });
+  const bootsMat = new THREE.MeshStandardMaterial({ color: 0x09090b, roughness: 0.2, metalness: 0.6 });
 
   const pelvis = new THREE.Group();
-  pelvis.position.y = 0.98;
+  pelvis.position.y = 0.95;
   root.add(pelvis);
 
   const torso = new THREE.Group();
   pelvis.add(torso);
 
-  const chest = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.22, 0.64, 12), uniformMat);
-  chest.position.y = 0.32;
+  const chest = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.2, 0.6, 12), uniformMat);
+  chest.position.y = 0.3;
   chest.castShadow = true;
   torso.add(chest);
 
-  // Duty belt with brass buckle
-  const belt = new THREE.Mesh(new THREE.CylinderGeometry(0.23, 0.23, 0.08, 12), beltMat);
+  // Duty Belt & Gold Buckle
+  const belt = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.21, 0.08, 12), beltMat);
   belt.position.y = 0.04;
   torso.add(belt);
-  const buckle = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.06, 0.04), goldMat);
-  buckle.position.set(0, 0.04, 0.23);
+
+  const buckle = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.06, 0.04), sharedMats.goldMetal);
+  buckle.position.set(0, 0.04, 0.21);
   torso.add(buckle);
 
-  // Head
+  // Head with Police Mustache & Official Peaked Cap (পিক ক্যাপ)
   const head = new THREE.Group();
-  head.position.y = 0.78;
+  head.position.y = 0.8;
   torso.add(head);
 
-  const headMesh = new THREE.Mesh(new THREE.SphereGeometry(0.18, 14, 12), faceMat);
+  const faceTex = createHumanFaceTexture('#bf7854', true, true);
+  const headMesh = new THREE.Mesh(
+    new THREE.SphereGeometry(0.18, 14, 12),
+    new THREE.MeshStandardMaterial({ map: faceTex, roughness: 0.6 })
+  );
   headMesh.scale.set(1, 1.15, 0.95);
   headMesh.castShadow = true;
   head.add(headMesh);
 
-  // Police Peaked Cap
-  const capCrown = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.18, 0.08, 14), uniformMat);
-  capCrown.position.y = 0.13;
-  head.add(capCrown);
-  const redBand = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.19, 0.03, 14), new THREE.MeshStandardMaterial({ color: 0xdc2626 }));
-  redBand.position.y = 0.09;
-  head.add(redBand);
-  const visor = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.02, 0.12), new THREE.MeshStandardMaterial({ color: 0x09090b, roughness: 0.2 }));
-  visor.position.set(0, 0.08, 0.16);
-  visor.rotation.x = 0.18;
+  // Bangladesh Police Cap (পিক ক্যাপ)
+  const cap = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.22, 0.19, 0.12, 14),
+    new THREE.MeshStandardMaterial({ color: 0x1e3a8a, roughness: 0.7 })
+  );
+  cap.position.set(0, 0.16, 0.02);
+  head.add(cap);
+
+  const visor = new THREE.Mesh(
+    new THREE.BoxGeometry(0.22, 0.02, 0.12),
+    new THREE.MeshStandardMaterial({ color: 0x09090b, roughness: 0.1, metalness: 0.8 })
+  );
+  visor.position.set(0, 0.11, 0.16);
   head.add(visor);
 
-  // Arms
-  const leftArm = new THREE.Group();
-  leftArm.position.set(-0.31, 0.54, 0);
-  torso.add(leftArm);
-  const lUpper = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.062, 0.28, 8), uniformMat);
-  lUpper.position.y = -0.14;
-  leftArm.add(lUpper);
+  // Gold Police Cap Badge
+  const badge = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.02), sharedMats.goldMetal);
+  badge.position.set(0, 0.18, 0.2);
+  head.add(badge);
 
-  const leftForearm = new THREE.Group();
-  leftForearm.position.set(0, -0.28, 0);
-  leftArm.add(leftForearm);
-  const lForearmMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.062, 0.055, 0.28, 8), uniformMat);
-  lForearmMesh.position.y = -0.14;
-  leftForearm.add(lForearmMesh);
+  // Helper for police limbs
+  const makeLimb = (isArm: boolean, isRight: boolean) => {
+    const parent = new THREE.Group();
+    if (isArm) {
+      parent.position.set(isRight ? 0.3 : -0.3, 0.52, 0);
+      torso.add(parent);
+    } else {
+      parent.position.set(isRight ? 0.13 : -0.13, 0, 0);
+      pelvis.add(parent);
+    }
 
-  const rightArm = new THREE.Group();
-  rightArm.position.set(0.31, 0.54, 0);
-  torso.add(rightArm);
-  const rUpper = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.062, 0.28, 8), uniformMat);
-  rUpper.position.y = -0.14;
-  rightArm.add(rUpper);
+    const upper = new THREE.Mesh(sharedGeos.limbUpper, uniformMat);
+    upper.position.y = -0.19;
+    upper.castShadow = true;
+    parent.add(upper);
 
-  const rightForearm = new THREE.Group();
-  rightForearm.position.set(0, -0.28, 0);
-  rightArm.add(rightForearm);
-  const rForearmMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.062, 0.055, 0.28, 8), uniformMat);
-  rForearmMesh.position.y = -0.14;
-  rightForearm.add(rForearmMesh);
+    const child = new THREE.Group();
+    child.position.y = -0.38;
+    parent.add(child);
 
-  // Police Baton (Lathi) in hand
-  const baton = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.024, 0.72, 8), batonMat);
+    const lower = new THREE.Mesh(sharedGeos.limbLower, isArm ? skinMat : uniformMat);
+    lower.position.y = -0.19;
+    lower.castShadow = true;
+    child.add(lower);
+
+    if (isArm) {
+      const hand = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.08, 0.04), skinMat);
+      hand.position.y = -0.42;
+      child.add(hand);
+    } else {
+      const boot = new THREE.Mesh(sharedGeos.sneaker, bootsMat);
+      boot.position.set(0, -0.42, 0.05);
+      child.add(boot);
+    }
+
+    return { parent, child };
+  };
+
+  const lArm = makeLimb(true, false);
+  const rArm = makeLimb(true, true);
+  const lLeg = makeLimb(false, false);
+  const rLeg = makeLimb(false, true);
+
+  // Police Lathi / Baton in right hand
+  const baton = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.022, 0.022, 0.65, 8),
+    sharedMats.wood
+  );
   baton.position.set(0, -0.38, 0.18);
-  baton.rotation.x = Math.PI / 4;
-  rightForearm.add(baton);
-
-  // Legs
-  const leftLeg = new THREE.Group();
-  leftLeg.position.set(-0.14, 0, 0);
-  pelvis.add(leftLeg);
-  const lThigh = new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.08, 0.44, 8), uniformMat);
-  lThigh.position.y = -0.22;
-  leftLeg.add(lThigh);
-
-  const leftCalf = new THREE.Group();
-  leftCalf.position.set(0, -0.44, 0);
-  leftLeg.add(leftCalf);
-  const lCalfMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.07, 0.44, 8), uniformMat);
-  lCalfMesh.position.y = -0.22;
-  leftCalf.add(lCalfMesh);
-
-  const rightLeg = new THREE.Group();
-  rightLeg.position.set(0.14, 0, 0);
-  pelvis.add(rightLeg);
-  const rThigh = new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.08, 0.44, 8), uniformMat);
-  rThigh.position.y = -0.22;
-  rightLeg.add(rThigh);
-
-  const rightCalf = new THREE.Group();
-  rightCalf.position.set(0, -0.44, 0);
-  rightLeg.add(rightCalf);
-  const rCalfMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.07, 0.44, 8), uniformMat);
-  rCalfMesh.position.y = -0.22;
-  rightCalf.add(rCalfMesh);
+  baton.rotation.x = Math.PI / 3;
+  rArm.child.add(baton);
 
   return {
     root,
     torso,
     head,
-    leftArm,
-    rightArm,
-    leftForearm,
-    rightForearm,
-    leftLeg,
-    rightLeg,
-    leftCalf,
-    rightCalf,
+    leftArm: lArm.parent,
+    rightArm: rArm.parent,
+    leftForearm: lArm.child,
+    rightForearm: rArm.child,
+    leftLeg: lLeg.parent,
+    rightLeg: rLeg.parent,
+    leftCalf: lLeg.child,
+    rightCalf: rLeg.child,
     baton,
     animTime: 0,
     archetype: 'POLICE',
   };
 }
 
-// 3. Diverse Citizen NPC Generator (Shopkeeper, Elder, Student, Woman, Rickshaw Puller)
-export function createCitizenModel(archetype: 'SHOPKEEPER' | 'ELDER' | 'STUDENT' | 'WOMAN' | 'PULLER', seedColor: number): CharacterRig {
+// 3. Diverse Bangladeshi Crowd NPCs (নাগরিকবৃন্দ ও মারামারির শত্রু)
+export function createCitizenModel(
+  archetype: 'SHOPKEEPER' | 'ELDER' | 'STUDENT' | 'WOMAN' | 'PULLER' | 'BRAWLER_RED',
+  primaryColor = 0x3b82f6
+): CharacterRig {
   const root = new THREE.Group();
   root.name = `NPC_${archetype}`;
 
   const isElder = archetype === 'ELDER';
   const isWoman = archetype === 'WOMAN';
-  const isShopkeeper = archetype === 'SHOPKEEPER';
+  const isBrawlerRed = archetype === 'BRAWLER_RED';
 
-  const skinTone = isElder ? '#d49a75' : isWoman ? '#e2a178' : '#c27b52';
-  const faceTex = createHumanFaceTexture(skinTone, isElder || isShopkeeper, isElder);
-  const faceMat = new THREE.MeshStandardMaterial({ map: faceTex, roughness: 0.7 });
-  const clothMat = new THREE.MeshStandardMaterial({ color: seedColor, roughness: 0.75 });
-  const pantsMat = new THREE.MeshStandardMaterial({
-    color: isElder ? 0xf8fafc : isWoman ? 0x9333ea : 0x1e293b,
-    roughness: 0.8,
+  const skinTone = isElder ? 0x9a5c3d : isWoman ? 0xd49575 : 0xbf7854;
+  const skinMat = new THREE.MeshStandardMaterial({ color: skinTone, roughness: 0.65 });
+  const clothMat = new THREE.MeshStandardMaterial({
+    color: isBrawlerRed ? 0xb91c1c : primaryColor, // Crimson red for brawler enemy matching screenshot!
+    roughness: 0.75,
   });
+  const whiteMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.8 });
 
   const pelvis = new THREE.Group();
   pelvis.position.y = 0.92;
@@ -471,392 +538,436 @@ export function createCitizenModel(archetype: 'SHOPKEEPER' | 'ELDER' | 'STUDENT'
   const torso = new THREE.Group();
   pelvis.add(torso);
 
-  const chest = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.20, 0.58, 10), clothMat);
-  chest.position.y = 0.29;
+  const chest = new THREE.Mesh(
+    new THREE.CylinderGeometry(isWoman ? 0.22 : 0.24, 0.19, 0.56, 10),
+    isElder ? whiteMat : clothMat
+  );
+  chest.position.y = 0.28;
   chest.castShadow = true;
   torso.add(chest);
 
-  // Gamchha (গামছা) for shopkeeper or rickshaw puller
-  if (isShopkeeper || archetype === 'PULLER') {
-    const gamchha = new THREE.Mesh(
-      new THREE.TorusGeometry(0.18, 0.035, 6, 12),
-      new THREE.MeshStandardMaterial({ color: 0xdc2626 })
-    );
-    gamchha.rotation.x = Math.PI / 2;
-    gamchha.position.y = 0.55;
-    torso.add(gamchha);
-  }
-
-  // Head
   const head = new THREE.Group();
-  head.position.y = 0.72;
+  head.position.y = 0.76;
   torso.add(head);
 
-  const headMesh = new THREE.Mesh(new THREE.SphereGeometry(0.17, 12, 10), faceMat);
+  const faceTex = createHumanFaceTexture(
+    isElder ? '#9a5c3d' : isWoman ? '#d49575' : '#bf7854',
+    isElder || isBrawlerRed,
+    false
+  );
+  const headMesh = new THREE.Mesh(
+    new THREE.SphereGeometry(0.17, 12, 10),
+    new THREE.MeshStandardMaterial({ map: faceTex, roughness: 0.6 })
+  );
   headMesh.scale.set(1, 1.15, 0.95);
   headMesh.castShadow = true;
   head.add(headMesh);
 
-  // Headgear (Prayer cap for elder, hair bun for woman)
+  // Elder Skullcap / Muslim Topi
   if (isElder) {
-    const tupi = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.16, 0.17, 0.06, 12),
-      new THREE.MeshStandardMaterial({ color: 0xf8fafc })
-    );
-    tupi.position.y = 0.14;
-    head.add(tupi);
-  } else if (isWoman) {
-    const hair = new THREE.Mesh(
-      new THREE.SphereGeometry(0.12, 8, 8),
-      new THREE.MeshStandardMaterial({ color: 0x09090b })
-    );
-    hair.position.set(0, 0.04, -0.16);
-    head.add(hair);
+    const topi = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.18, 0.08, 10), whiteMat);
+    topi.position.y = 0.16;
+    head.add(topi);
   }
 
-  // Arms
-  const leftArm = new THREE.Group();
-  leftArm.position.set(-0.28, 0.5, 0);
-  torso.add(leftArm);
-  const lUpper = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.055, 0.26, 8), clothMat);
-  lUpper.position.y = -0.13;
-  leftArm.add(lUpper);
+  // Woman Hair Bun (খোঁপা)
+  if (isWoman) {
+    const bun = new THREE.Mesh(
+      new THREE.SphereGeometry(0.1, 8, 8),
+      new THREE.MeshStandardMaterial({ color: 0x09090b, roughness: 0.9 })
+    );
+    bun.position.set(0, 0.04, -0.16);
+    head.add(bun);
+  }
 
-  const leftForearm = new THREE.Group();
-  leftForearm.position.set(0, -0.26, 0);
-  leftArm.add(leftForearm);
-  const lFore = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.05, 0.24, 8), clothMat);
-  lFore.position.y = -0.12;
-  leftForearm.add(lFore);
+  const makeLimb = (isArm: boolean, isRight: boolean) => {
+    const parent = new THREE.Group();
+    if (isArm) {
+      parent.position.set(isRight ? 0.28 : -0.28, 0.48, 0);
+      torso.add(parent);
+    } else {
+      parent.position.set(isRight ? 0.12 : -0.12, 0, 0);
+      pelvis.add(parent);
+    }
 
-  const rightArm = new THREE.Group();
-  rightArm.position.set(0.28, 0.5, 0);
-  torso.add(rightArm);
-  const rUpper = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.055, 0.26, 8), clothMat);
-  rUpper.position.y = -0.13;
-  rightArm.add(rUpper);
+    const upper = new THREE.Mesh(sharedGeos.limbUpper, isArm ? skinMat : clothMat);
+    upper.position.y = -0.19;
+    upper.castShadow = true;
+    parent.add(upper);
 
-  const rightForearm = new THREE.Group();
-  rightForearm.position.set(0, -0.26, 0);
-  rightArm.add(rightForearm);
-  const rFore = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.05, 0.24, 8), clothMat);
-  rFore.position.y = -0.12;
-  rightForearm.add(rFore);
+    const child = new THREE.Group();
+    child.position.y = -0.38;
+    parent.add(child);
 
-  // Legs
-  const leftLeg = new THREE.Group();
-  leftLeg.position.set(-0.12, 0, 0);
-  pelvis.add(leftLeg);
-  const lThigh = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.075, 0.40, 8), pantsMat);
-  lThigh.position.y = -0.20;
-  leftLeg.add(lThigh);
+    const lower = new THREE.Mesh(sharedGeos.limbLower, skinMat);
+    lower.position.y = -0.19;
+    lower.castShadow = true;
+    child.add(lower);
 
-  const leftCalf = new THREE.Group();
-  leftCalf.position.set(0, -0.40, 0);
-  leftLeg.add(leftCalf);
-  const lCalfMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.065, 0.40, 8), pantsMat);
-  lCalfMesh.position.y = -0.20;
-  leftCalf.add(lCalfMesh);
+    return { parent, child };
+  };
 
-  const rightLeg = new THREE.Group();
-  rightLeg.position.set(0.12, 0, 0);
-  pelvis.add(rightLeg);
-  const rThigh = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.075, 0.40, 8), pantsMat);
-  rThigh.position.y = -0.20;
-  rightLeg.add(rThigh);
-
-  const rightCalf = new THREE.Group();
-  rightCalf.position.set(0, -0.40, 0);
-  rightLeg.add(rightCalf);
-  const rCalfMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.065, 0.40, 8), pantsMat);
-  rCalfMesh.position.y = -0.20;
-  rightCalf.add(rCalfMesh);
+  const lArm = makeLimb(true, false);
+  const rArm = makeLimb(true, true);
+  const lLeg = makeLimb(false, false);
+  const rLeg = makeLimb(false, true);
 
   return {
     root,
     torso,
     head,
-    leftArm,
-    rightArm,
-    leftForearm,
-    rightForearm,
-    leftLeg,
-    rightLeg,
-    leftCalf,
-    rightCalf,
+    leftArm: lArm.parent,
+    rightArm: rArm.parent,
+    leftForearm: lArm.child,
+    rightForearm: rArm.child,
+    leftLeg: lLeg.parent,
+    rightLeg: rLeg.parent,
+    leftCalf: lLeg.child,
+    rightCalf: rLeg.child,
     animTime: Math.random() * 10,
     archetype,
   };
 }
 
-// 4. Authentic Green CNG Auto-Rickshaw (ঢাকা মেট্রো সিএনজি)
+// 4. Detailed Green CNG Auto-Rickshaw Model (সিএনজি অটো-রিকশা)
 export function createCNGModel(): VehicleRig {
   const root = new THREE.Group();
-  root.name = 'Dhaka_CNG';
+  root.name = 'Green_CNG';
+
   const wheels: THREE.Mesh[] = [];
 
-  const greenMat = new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.35, metalness: 0.4 });
-  const yellowMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.45, metalness: 0.1 });
-  const blackMetal = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.5, metalness: 0.7 });
-  const tireMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.9 });
-  const glassMat = new THREE.MeshPhysicalMaterial({ color: 0x93c5fd, transparent: true, opacity: 0.35, roughness: 0.1 });
+  // Main chassis aerodynamic shell
+  const body = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.25, 2.6), sharedMats.cngGreen);
+  body.position.y = 0.85;
+  body.castShadow = true;
+  root.add(body);
 
-  // Main Cabin
-  const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.95, 1.8), greenMat);
-  cabin.position.set(0, 0.9, -0.2);
-  cabin.castShadow = true;
-  root.add(cabin);
-
-  // Aerodynamic nose
-  const nose = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.7, 0.8, 4), greenMat);
-  nose.rotateY(Math.PI / 4);
-  nose.position.set(0, 0.8, 0.95);
-  root.add(nose);
-
-  // Clear windshield
-  const windshield = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.6, 0.05), glassMat);
-  windshield.position.set(0, 1.25, 0.72);
-  windshield.rotation.x = -0.25;
-  root.add(windshield);
-
-  // Yellow Fiberglass Roof
-  const roof = new THREE.Mesh(new THREE.BoxGeometry(1.44, 0.16, 2.3), yellowMat);
-  roof.position.set(0, 1.5, -0.05);
-  roof.castShadow = true;
+  // Black Canvas Roof Canopy (ছাদের কালো হুড)
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(1.36, 0.22, 2.45), sharedMats.cngCanopyBlack);
+  roof.position.set(0, 1.55, 0);
   root.add(roof);
 
-  // Side Metal Safety Grille (Wire Mesh)
-  for (let s = -1; s <= 1; s += 2) {
-    const grille = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.75, 1.2), blackMetal);
-    grille.position.set(s * 0.7, 1.0, -0.15);
-    root.add(grille);
-  }
+  // Front Windshield with black frame
+  const windshield = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.65, 0.08), sharedMats.glass);
+  windshield.position.set(0, 1.15, 1.25);
+  root.add(windshield);
 
-  // Front Headlight (with spotlight)
-  const spot = new THREE.SpotLight(0xfef08a, 2, 25, Math.PI / 6, 0.3);
-  spot.position.set(0, 0.78, 1.4);
-  spot.target.position.set(0, 0, 10);
-  root.add(spot);
-  root.add(spot.target);
+  // Side Metal Safety Grille / Mesh Cage Doors (সিএনজির পাশের খাঁচা)
+  const cageMat = new THREE.MeshStandardMaterial({
+    color: 0x27272a,
+    metalness: 0.8,
+    roughness: 0.4,
+    wireframe: true,
+  });
+  const leftCage = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.75), cageMat);
+  leftCage.position.set(-0.71, 1.05, -0.2);
+  leftCage.rotation.y = Math.PI / 2;
+  root.add(leftCage);
 
-  const headlight = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.12, 0.12, 0.08, 12),
-    new THREE.MeshStandardMaterial({ color: 0xfef08a, emissive: 0xfef08a, emissiveIntensity: 0.8 })
+  const rightCage = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.75), cageMat);
+  rightCage.position.set(0.71, 1.05, -0.2);
+  rightCage.rotation.y = -Math.PI / 2;
+  root.add(rightCage);
+
+  // Dhaka Registration Plate ("ঢাকা মেট্রো-থ ১১-৪২০২")
+  const plateTex = createCNGDetailsTexture();
+  const plate = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.8, 0.4),
+    new THREE.MeshStandardMaterial({ map: plateTex, roughness: 0.3 })
   );
-  headlight.rotation.x = Math.PI / 2;
-  headlight.position.set(0, 0.78, 1.35);
-  root.add(headlight);
-
-  // Bengali License plate at back
-  const plate = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.22, 0.04), new THREE.MeshStandardMaterial({ color: 0x15803d }));
-  plate.position.set(0, 0.6, -1.12);
+  plate.position.set(0, 0.6, -1.31);
+  plate.rotation.y = Math.PI;
   root.add(plate);
 
-  // 3 Wheels
-  const addWheel = (x: number, y: number, z: number) => {
-    const w = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.22, 14), tireMat);
-    w.rotation.z = Math.PI / 2;
-    w.position.set(x, y, z);
-    w.castShadow = true;
-    root.add(w);
-    wheels.push(w);
+  // Front Chrome Headlight
+  const headlight = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.1, 12), sharedMats.chrome);
+  headlight.rotation.x = Math.PI / 2;
+  headlight.position.set(0, 0.85, 1.35);
+  root.add(headlight);
+
+  const lens = new THREE.Mesh(new THREE.CircleGeometry(0.12, 12), sharedMats.headlightLens);
+  lens.position.set(0, 0.85, 1.41);
+  root.add(lens);
+
+  // Rear Taillights
+  const tailL = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.12, 0.06), sharedMats.taillightLens);
+  tailL.position.set(-0.55, 0.75, -1.32);
+  root.add(tailL);
+
+  const tailR = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.12, 0.06), sharedMats.taillightLens);
+  tailR.position.set(0.55, 0.75, -1.32);
+  root.add(tailR);
+
+  // 3 Wheels (1 Front Center, 2 Rear Sides)
+  const wFront = new THREE.Mesh(sharedGeos.wheelTire, sharedMats.blackRubber);
+  wFront.position.set(0, 0.38, 1.05);
+  wFront.castShadow = true;
+  root.add(wFront);
+  wheels.push(wFront);
+
+  const wRearL = new THREE.Mesh(sharedGeos.wheelTire, sharedMats.blackRubber);
+  wRearL.position.set(-0.72, 0.38, -0.85);
+  wRearL.castShadow = true;
+  root.add(wRearL);
+  wheels.push(wRearL);
+
+  const wRearR = new THREE.Mesh(sharedGeos.wheelTire, sharedMats.blackRubber);
+  wRearR.position.set(0.72, 0.38, -0.85);
+  wRearR.castShadow = true;
+  root.add(wRearR);
+  wheels.push(wRearR);
+
+  return {
+    root,
+    wheels,
+    vehicleType: 'CNG',
+    speed: 0,
+    steerAngle: 0,
   };
-
-  addWheel(0, 0.32, 1.1); // Front
-  addWheel(-0.75, 0.32, -0.8); // Rear Left
-  addWheel(0.75, 0.32, -0.8); // Rear Right
-
-  return { root, wheels, headlights: [spot], vehicleType: 'CNG', speed: 0, steerAngle: 0 };
 }
 
-// 5. Traditional Dhaka Rickshaw Model with Rickshaw Art
+// 5. Detailed Traditional Dhaka Rickshaw Model (ঐতিহ্যবাহী ঢাকাই রিকশা)
 export function createRickshawModel(): VehicleRig {
   const root = new THREE.Group();
   root.name = 'Dhaka_Rickshaw';
+
   const wheels: THREE.Mesh[] = [];
 
-  const chromeMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.9, roughness: 0.15 });
-  const tireMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.9 });
-  const artTex = createRichRickshawArt();
+  // Chrome Tubular Bicycle Frame
+  const frame = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.8, 8), sharedMats.chrome);
+  frame.rotation.x = Math.PI / 2;
+  frame.position.set(0, 0.55, 0.3);
+  root.add(frame);
 
-  // Pipe chassis
-  const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 2.2, 8), chromeMat);
-  pipe.rotation.x = Math.PI / 2;
-  pipe.position.set(0, 0.45, 0);
-  root.add(pipe);
+  // Handlebars & Bell ("টিং টিং")
+  const handlebar = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.04, 0.04), sharedMats.chrome);
+  handlebar.position.set(0, 1.15, 1.05);
+  root.add(handlebar);
 
-  // Fork and handlebar
-  const fork = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.9, 8), chromeMat);
-  fork.position.set(0, 0.7, 1.1);
-  root.add(fork);
-  const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.8, 8), chromeMat);
-  bar.rotation.z = Math.PI / 2;
-  bar.position.set(0, 1.15, 1.05);
-  root.add(bar);
+  const bell = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), sharedMats.goldMetal);
+  bell.position.set(0.2, 1.2, 1.05);
+  root.add(bell);
 
-  // Passenger Seat
-  const seat = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.2, 0.6), new THREE.MeshStandardMaterial({ color: 0xef4444 }));
-  seat.position.set(0, 0.85, -0.4);
+  // Passenger Bench Seat with Red/Gold Rexine Floral Cushion
+  const seatMat = new THREE.MeshStandardMaterial({ color: 0xb91c1c, roughness: 0.5 });
+  const seat = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.18, 0.45), seatMat);
+  seat.position.set(0, 0.85, -0.45);
   root.add(seat);
 
-  // Rickshaw Art Backboard
-  const artBoard = new THREE.Mesh(
-    new THREE.BoxGeometry(1.1, 0.65, 0.04),
-    new THREE.MeshStandardMaterial({ map: artTex, roughness: 0.35 })
-  );
-  artBoard.position.set(0, 1.25, -0.72);
-  root.add(artBoard);
+  const backrest = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.45, 0.1), seatMat);
+  backrest.position.set(0, 1.15, -0.65);
+  root.add(backrest);
 
-  // Folding Canopy Hood
+  // Ornate Rickshaw Hood Canopy (রিকশার ভাঁজ হওয়া হুড)
   const hood = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.65, 0.65, 1.15, 12, 1, false, 0, Math.PI),
-    new THREE.MeshStandardMaterial({ color: 0x0284c7 })
+    new THREE.CylinderGeometry(0.55, 0.55, 0.98, 12, 1, false, 0, Math.PI),
+    new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.6 })
   );
   hood.rotation.z = Math.PI / 2;
-  hood.position.set(0, 1.5, -0.45);
+  hood.position.set(0, 1.35, -0.6);
   root.add(hood);
 
-  // 3 Spoked Wheels
-  const addWheel = (x: number, y: number, z: number) => {
-    const w = new THREE.Mesh(new THREE.CylinderGeometry(0.44, 0.44, 0.08, 16), tireMat);
-    w.rotation.z = Math.PI / 2;
-    w.position.set(x, y, z);
-    w.castShadow = true;
-    root.add(w);
-    wheels.push(w);
+  // Authentic Colorful Bengali Rickshaw Art Rear Plate (রিকশা আর্ট)
+  const artTex = createRichRickshawArt();
+  const artPlate = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.85, 0.5),
+    new THREE.MeshStandardMaterial({ map: artTex, roughness: 0.4 })
+  );
+  artPlate.position.set(0, 0.72, -0.88);
+  artPlate.rotation.y = Math.PI;
+  root.add(artPlate);
+
+  // Large Spoked Wheels (1 Front, 2 Rear)
+  const wFront = new THREE.Mesh(sharedGeos.rickshawWheel, sharedMats.blackRubber);
+  wFront.position.set(0, 0.48, 1.3);
+  wFront.castShadow = true;
+  root.add(wFront);
+  wheels.push(wFront);
+
+  const wRearL = new THREE.Mesh(sharedGeos.rickshawWheel, sharedMats.blackRubber);
+  wRearL.position.set(-0.58, 0.48, -0.55);
+  wRearL.castShadow = true;
+  root.add(wRearL);
+  wheels.push(wRearL);
+
+  const wRearR = new THREE.Mesh(sharedGeos.rickshawWheel, sharedMats.blackRubber);
+  wRearR.position.set(0.58, 0.48, -0.55);
+  wRearR.castShadow = true;
+  root.add(wRearR);
+  wheels.push(wRearR);
+
+  return {
+    root,
+    wheels,
+    vehicleType: 'RICKSHAW',
+    speed: 0,
+    steerAngle: 0,
   };
-
-  addWheel(0, 0.44, 1.2);
-  addWheel(-0.68, 0.44, -0.45);
-  addWheel(0.68, 0.44, -0.45);
-
-  return { root, wheels, vehicleType: 'RICKSHAW', speed: 0, steerAngle: 0 };
 }
 
-// 6. Classic Dhaka City Bus (ঢাকা মেট্রো বাস)
+// 6. Detailed Dhaka Local Bus Model ("মুড়ির টিন" / লোকাল বাস)
 export function createDhakaBusModel(): VehicleRig {
   const root = new THREE.Group();
-  root.name = 'Dhaka_City_Bus';
+  root.name = 'Dhaka_Bus';
+
   const wheels: THREE.Mesh[] = [];
 
   const busTex = createBusSideTexture();
-  const sideMat = new THREE.MeshStandardMaterial({ map: busTex, roughness: 0.4 });
-  const frontMat = new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.4 });
-  const glassMat = new THREE.MeshPhysicalMaterial({ color: 0x0f172a, roughness: 0.1 });
-  const tireMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.9 });
+  const bodyMat = new THREE.MeshStandardMaterial({ map: busTex, roughness: 0.7 });
+  const busBody = new THREE.Mesh(new THREE.BoxGeometry(2.5, 2.4, 8.5), bodyMat);
+  busBody.position.y = 1.7;
+  busBody.castShadow = true;
+  root.add(busBody);
 
-  // Main Bus Body (8m length, 2.8m width, 3.2m height)
-  const body = new THREE.Mesh(new THREE.BoxGeometry(2.8, 2.6, 8.5), sideMat);
-  body.position.y = 1.8;
-  body.castShadow = true;
-  root.add(body);
-
-  // Front Windshield
-  const frontGlass = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.2, 0.1), glassMat);
-  frontGlass.position.set(0, 2.2, 4.3);
-  root.add(frontGlass);
-
-  // Front Destination Board ("গাবতলী - ফার্মগেট - মতিঝিল")
-  const board = new THREE.Mesh(
-    new THREE.BoxGeometry(2.2, 0.35, 0.1),
-    new THREE.MeshStandardMaterial({ color: 0xfacc15 })
+  const roof = new THREE.Mesh(
+    new THREE.BoxGeometry(2.45, 0.35, 8.45),
+    new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.6 })
   );
-  board.position.set(0, 2.95, 4.28);
-  root.add(board);
+  roof.position.set(0, 2.95, 0);
+  root.add(roof);
 
-  // Double Headlights
-  for (let s = -1; s <= 1; s += 2) {
-    const light = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.16, 0.16, 0.1, 10),
-      new THREE.MeshStandardMaterial({ color: 0xfef08a, emissive: 0xfef08a, emissiveIntensity: 0.8 })
-    );
-    light.rotation.x = Math.PI / 2;
-    light.position.set(s * 0.9, 1.1, 4.3);
-    root.add(light);
-  }
+  const windshield = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.9, 0.1), sharedMats.glass);
+  windshield.position.set(0, 2.1, 4.26);
+  root.add(windshield);
 
-  // 4 Large Bus Wheels
-  const addWheel = (x: number, y: number, z: number) => {
-    const w = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.35, 16), tireMat);
-    w.rotation.z = Math.PI / 2;
+  const grille = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.5, 0.1), sharedMats.chrome);
+  grille.position.set(0, 1.05, 4.26);
+  root.add(grille);
+
+  const bumper = new THREE.Mesh(
+    new THREE.BoxGeometry(2.5, 0.3, 0.3),
+    new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.4, metalness: 0.8 })
+  );
+  bumper.position.set(0, 0.6, 4.3);
+  root.add(bumper);
+
+  const hl1 = new THREE.Mesh(new THREE.CircleGeometry(0.16, 12), sharedMats.headlightLens);
+  hl1.position.set(-0.85, 1.05, 4.27);
+  root.add(hl1);
+
+  const hl2 = new THREE.Mesh(new THREE.CircleGeometry(0.16, 12), sharedMats.headlightLens);
+  hl2.position.set(0.85, 1.05, 4.27);
+  root.add(hl2);
+
+  const rack = new THREE.Mesh(
+    new THREE.BoxGeometry(2.2, 0.25, 4.5),
+    new THREE.MeshStandardMaterial({ color: 0x475569, wireframe: true })
+  );
+  rack.position.set(0, 3.25, -0.5);
+  root.add(rack);
+
+  const wheelPositions = [
+    [-1.2, 0.52, 2.6],
+    [1.2, 0.52, 2.6],
+    [-1.2, 0.52, -2.4],
+    [1.2, 0.52, -2.4],
+    [-1.2, 0.52, -3.2],
+    [1.2, 0.52, -3.2],
+  ];
+
+  wheelPositions.forEach(([x, y, z]) => {
+    const w = new THREE.Mesh(sharedGeos.wheelTire, sharedMats.blackRubber);
+    w.scale.set(1.2, 1.2, 1.2);
     w.position.set(x, y, z);
     w.castShadow = true;
     root.add(w);
     wheels.push(w);
+  });
+
+  return {
+    root,
+    wheels,
+    vehicleType: 'BUS',
+    speed: 0,
+    steerAngle: 0,
   };
-
-  addWheel(-1.4, 0.55, 2.6);
-  addWheel(1.4, 0.55, 2.6);
-  addWheel(-1.4, 0.55, -2.6);
-  addWheel(1.4, 0.55, -2.6);
-
-  return { root, wheels, vehicleType: 'BUS', speed: 0, steerAngle: 0 };
 }
 
-// 7. Police Patrol SUV (বাংলাদেশ পুলিশ গাড়ি)
+// 7. Police Patrol SUV Model (বাংলাদেশ পুলিশ গাড়ি)
 export function createPoliceCarModel(): VehicleRig {
   const root = new THREE.Group();
   root.name = 'Police_Patrol_Car';
+
   const wheels: THREE.Mesh[] = [];
+  const sirenLights: THREE.PointLight[] = [];
 
-  const whiteMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.3, metalness: 0.2 });
-  const blueMat = new THREE.MeshStandardMaterial({ color: 0x1e3a8a, roughness: 0.3 });
-  const glassMat = new THREE.MeshPhysicalMaterial({ color: 0x0f172a, roughness: 0.1 });
-  const tireMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.9 });
+  const liveryTex = createPoliceLiveryTexture();
+  const bodyMat = new THREE.MeshStandardMaterial({ map: liveryTex, roughness: 0.35, metalness: 0.2 });
 
-  // Body
-  const body = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.75, 4.2), whiteMat);
-  body.position.y = 0.75;
-  body.castShadow = true;
-  root.add(body);
+  const carBody = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.95, 4.4), bodyMat);
+  carBody.position.y = 0.85;
+  carBody.castShadow = true;
+  root.add(carBody);
 
-  // Side blue police stripe
-  const stripeL = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.25, 4.0), blueMat);
-  stripeL.position.set(-0.96, 0.75, 0);
-  root.add(stripeL);
-  const stripeR = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.25, 4.0), blueMat);
-  stripeR.position.set(0.96, 0.75, 0);
-  root.add(stripeR);
-
-  // Cabin
-  const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.65, 0.65, 2.2), glassMat);
-  cabin.position.set(0, 1.35, -0.2);
+  const cabin = new THREE.Mesh(
+    new THREE.BoxGeometry(1.8, 0.75, 2.4),
+    new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.4 })
+  );
+  cabin.position.set(0, 1.55, -0.2);
   root.add(cabin);
 
-  // Roof
-  const roof = new THREE.Mesh(new THREE.BoxGeometry(1.68, 0.08, 2.25), whiteMat);
-  roof.position.set(0, 1.7, -0.2);
-  root.add(roof);
+  const winFront = new THREE.Mesh(new THREE.BoxGeometry(1.65, 0.6, 0.08), sharedMats.glass);
+  winFront.position.set(0, 1.52, 1.02);
+  root.add(winFront);
 
-  // Emergency Siren Lightbar (Red and Blue)
-  const bar = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.12, 0.24), new THREE.MeshStandardMaterial({ color: 0x0f172a }));
-  bar.position.set(0, 1.8, -0.2);
-  root.add(bar);
+  const bullBar = new THREE.Mesh(
+    new THREE.BoxGeometry(1.9, 0.65, 0.2),
+    new THREE.MeshStandardMaterial({ color: 0x18181b, metalness: 0.9, roughness: 0.2 })
+  );
+  bullBar.position.set(0, 0.75, 2.25);
+  root.add(bullBar);
 
-  const redLight = new THREE.PointLight(0xef4444, 3, 20);
-  redLight.position.set(-0.4, 1.85, -0.2);
+  // Roof Emergency Siren Lightbar
+  const lightbarBase = new THREE.Mesh(
+    new THREE.BoxGeometry(0.9, 0.08, 0.2),
+    new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.9 })
+  );
+  lightbarBase.position.set(0, 1.95, -0.2);
+  root.add(lightbarBase);
+
+  // Red Siren
+  const redLight = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.12, 0.16), sharedMats.taillightLens);
+  redLight.position.set(-0.25, 2.02, -0.2);
   root.add(redLight);
 
-  const blueLight = new THREE.PointLight(0x3b82f6, 3, 20);
-  blueLight.position.set(0.4, 1.85, -0.2);
+  const redPoint = new THREE.PointLight(0xef4444, 4.0, 15);
+  redPoint.position.set(-0.25, 2.05, -0.2);
+  root.add(redPoint);
+  sirenLights.push(redPoint);
+
+  // Blue Siren
+  const blueLight = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.12, 0.16), sharedMats.policeBlueLight);
+  blueLight.position.set(0.25, 2.02, -0.2);
   root.add(blueLight);
 
-  // 4 Wheels
-  const addWheel = (x: number, y: number, z: number) => {
-    const w = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.38, 0.26, 14), tireMat);
-    w.rotation.z = Math.PI / 2;
+  const bluePoint = new THREE.PointLight(0x3b82f6, 4.0, 15);
+  bluePoint.position.set(0.25, 2.05, -0.2);
+  root.add(bluePoint);
+  sirenLights.push(bluePoint);
+
+  const wPositions = [
+    [-1.0, 0.42, 1.35],
+    [1.0, 0.42, 1.35],
+    [-1.0, 0.42, -1.35],
+    [1.0, 0.42, -1.35],
+  ];
+
+  wPositions.forEach(([x, y, z]) => {
+    const w = new THREE.Mesh(sharedGeos.wheelTire, sharedMats.blackRubber);
     w.position.set(x, y, z);
     w.castShadow = true;
     root.add(w);
     wheels.push(w);
+  });
+
+  return {
+    root,
+    wheels,
+    sirenLights,
+    vehicleType: 'POLICE_CAR',
+    speed: 0,
+    steerAngle: 0,
   };
-
-  addWheel(-1.0, 0.38, 1.25);
-  addWheel(1.0, 0.38, 1.25);
-  addWheel(-1.0, 0.38, -1.25);
-  addWheel(1.0, 0.38, -1.25);
-
-  return { root, wheels, sirenLights: [redLight, blueLight], vehicleType: 'POLICE_CAR', speed: 0, steerAngle: 0 };
 }
 
 // 8. Multi-Storey Dhaka Building with Detailed Bengali Storefront & Rooftops
@@ -876,10 +987,7 @@ export function createDhakaBuilding(
   const building = new THREE.Group();
 
   const facadeTex = createBuildingFacadeTexture(wallColor, trimColor, brickMode);
-  const wallMat = new THREE.MeshStandardMaterial({
-    map: facadeTex,
-    roughness: 0.85,
-  });
+  const wallMat = new THREE.MeshStandardMaterial({ map: facadeTex, roughness: 0.85 });
 
   const structure = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), wallMat);
   structure.position.y = height / 2;
@@ -912,22 +1020,10 @@ export function createDhakaBuilding(
   building.add(parapet);
 
   // Classic Sintex Water Tank (পানির ট্যাংক)
-  const tank = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.85, 0.85, 1.8, 12),
-    new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.4 })
-  );
-  tank.position.set(width * 0.25, height + 1.0, depth * 0.15);
+  const tank = new THREE.Mesh(sharedGeos.waterTank, sharedMats.blackRubber);
+  tank.position.set(width * 0.25, height + 0.9, depth * 0.15);
   tank.castShadow = true;
   building.add(tank);
-
-  // TV Dish Antenna
-  const dish = new THREE.Mesh(
-    new THREE.SphereGeometry(0.65, 8, 8, 0, Math.PI * 2, 0, Math.PI * 0.4),
-    new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.3 })
-  );
-  dish.rotation.x = Math.PI / 4;
-  dish.position.set(-width * 0.25, height + 0.8, -depth * 0.15);
-  building.add(dish);
 
   return building;
 }
@@ -938,170 +1034,197 @@ export function createElectricPoleWithWires(): THREE.Group {
   const concreteMat = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.9 });
   const woodMat = new THREE.MeshStandardMaterial({ color: 0x3f1c04, roughness: 0.8 });
 
-  // Main pole
   const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.18, 9.0, 8), concreteMat);
   pole.position.y = 4.5;
   pole.castShadow = true;
   poleGroup.add(pole);
 
-  // 2 Horizontal Crossbars
   const crossbar1 = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.12, 0.12), woodMat);
   crossbar1.position.set(0, 7.8, 0);
   poleGroup.add(crossbar1);
 
-  const crossbar2 = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.12, 0.12), woodMat);
+  const crossbar2 = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.12, 0.12), woodMat);
   crossbar2.position.set(0, 8.4, 0);
   poleGroup.add(crossbar2);
 
-  // Insulators
-  const insMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.2 });
-  for (let s = -1; s <= 1; s += 2) {
-    const ins1 = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.15, 6), insMat);
-    ins1.position.set(s * 1.0, 7.9, 0);
-    poleGroup.add(ins1);
-
-    const ins2 = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.15, 6), insMat);
-    ins2.position.set(s * 0.7, 8.5, 0);
-    poleGroup.add(ins2);
-  }
-
-  // Transformer Drum on Pole
-  const trans = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.35, 0.35, 1.0, 10),
-    new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.6 })
-  );
-  trans.position.set(0.45, 6.2, 0);
-  poleGroup.add(trans);
+  const insMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.2 });
+  [-1.0, -0.4, 0.4, 1.0].forEach((x) => {
+    const ins = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.14, 6), insMat);
+    ins.position.set(x, 7.9, 0);
+    poleGroup.add(ins);
+  });
 
   return poleGroup;
 }
 
-// 10. Complete Street Market Stalls with Crates of Fresh Hilsa Fish, Vegetables, and Fruits
-export function createDetailedMarketStalls(): THREE.Group {
-  const market = new THREE.Group();
-  market.name = 'Dhaka_Bazaar_District';
+// 10. Streetlights (রাস্তার ল্যাম্পপোস্ট)
+export function createStreetLight(): THREE.Group {
+  const group = new THREE.Group();
+  const metalMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.8, roughness: 0.3 });
 
-  const woodMat = new THREE.MeshStandardMaterial({ color: 0x854d0e, roughness: 0.9 });
-  const fishTex = createVegFishBoxTexture('FISH');
-  const vegTex = createVegFishBoxTexture('VEG');
-  const fruitTex = createVegFishBoxTexture('FRUIT');
+  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.12, 6.5, 8), metalMat);
+  post.position.y = 3.25;
+  group.add(post);
 
-  const fishMat = new THREE.MeshStandardMaterial({ map: fishTex, roughness: 0.4 });
-  const vegMat = new THREE.MeshStandardMaterial({ map: vegTex, roughness: 0.6 });
-  const fruitMat = new THREE.MeshStandardMaterial({ map: fruitTex, roughness: 0.6 });
+  const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.2, 8), metalMat);
+  arm.rotation.z = Math.PI / 3;
+  arm.position.set(0.4, 6.3, 0);
+  group.add(arm);
 
-  // 3 Covered Stalls in a bustling row
-  const umbrellaColors = [0xdc2626, 0x0284c7, 0x16a34a];
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.1, 0.25), metalMat);
+  head.position.set(0.85, 6.6, 0);
+  group.add(head);
 
-  for (let s = 0; s < 3; s++) {
-    const stall = new THREE.Group();
-    stall.position.set(s * 5.5, 0, 0);
+  const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.04, 0.2), sharedMats.headlightLens);
+  lamp.position.set(0.85, 6.53, 0);
+  group.add(lamp);
 
-    // Table
-    const table = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.85, 1.8), woodMat);
-    table.position.set(0, 0.42, 0);
-    table.castShadow = true;
-    stall.add(table);
-
-    // Large Market Striped Parasol / Umbrella
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 3.2, 6), woodMat);
-    pole.position.set(0, 1.6, 0);
-    stall.add(pole);
-
-    const umbrella = new THREE.Mesh(
-      new THREE.ConeGeometry(2.4, 0.9, 12, 1, true),
-      new THREE.MeshStandardMaterial({ color: umbrellaColors[s], roughness: 0.7 })
-    );
-    umbrella.position.set(0, 3.1, 0);
-    umbrella.castShadow = true;
-    stall.add(umbrella);
-
-    // Produce Baskets on table
-    const boxMat = s === 0 ? fishMat : s === 1 ? vegMat : fruitMat;
-    for (let b = -1.2; b <= 1.2; b += 1.2) {
-      const box = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.25, 1.2), boxMat);
-      box.position.set(b, 0.95, 0);
-      box.castShadow = true;
-      stall.add(box);
-    }
-
-    market.add(stall);
-  }
-
-  return market;
+  return group;
 }
 
-// 11. Roadside Tree with Foliage and Concrete Planter Box
+// 11. Roadside Palm / Neem Tree (রাস্তার ধারের গাছ)
 export function createRoadsideTree(): THREE.Group {
   const tree = new THREE.Group();
 
-  // Square concrete planter box
-  const planter = new THREE.Mesh(
-    new THREE.BoxGeometry(1.8, 0.4, 1.8),
-    new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.9 })
-  );
-  planter.position.y = 0.2;
-  tree.add(planter);
-
-  // Dirt
-  const soil = new THREE.Mesh(
-    new THREE.BoxGeometry(1.6, 0.05, 1.6),
-    new THREE.MeshStandardMaterial({ color: 0x3f1c04, roughness: 0.95 })
-  );
-  soil.position.y = 0.4;
-  tree.add(soil);
-
-  // Trunk
-  const trunk = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.2, 0.28, 4.0, 8),
-    new THREE.MeshStandardMaterial({ color: 0x5c2b0c, roughness: 0.9 })
-  );
-  trunk.position.y = 2.2;
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.28, 3.2, 8), sharedMats.wood);
+  trunk.position.y = 1.6;
   trunk.castShadow = true;
   tree.add(trunk);
 
-  // Lush multi-sphere tropical foliage
-  const foliageMat = new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.85 });
-  const f1 = new THREE.Mesh(new THREE.SphereGeometry(1.5, 8, 8), foliageMat);
-  f1.position.set(0, 4.8, 0);
+  const foliageMat = new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.9 });
+  const f1 = new THREE.Mesh(new THREE.SphereGeometry(1.4, 8, 8), foliageMat);
+  f1.position.y = 3.8;
   f1.castShadow = true;
   tree.add(f1);
 
-  const f2 = new THREE.Mesh(new THREE.SphereGeometry(1.2, 8, 8), foliageMat);
-  f2.position.set(0.6, 5.4, 0.4);
+  const f2 = new THREE.Mesh(new THREE.SphereGeometry(1.0, 8, 8), foliageMat);
+  f2.position.set(0.4, 4.6, 0.2);
+  f2.castShadow = true;
   tree.add(f2);
-
-  const f3 = new THREE.Mesh(new THREE.SphereGeometry(1.1, 8, 8), foliageMat);
-  f3.position.set(-0.5, 5.2, -0.3);
-  tree.add(f3);
 
   return tree;
 }
 
-// 12. Street Lamp with Warm Emissive Glow
-export function createStreetLight(): THREE.Group {
-  const group = new THREE.Group();
-  const poleMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.8, roughness: 0.3 });
+// 12. Detailed Dhaka Bazaar Stalls, Shelves & Tong Tea Cafe (দোকানের আলমারি ও টং ক্যাফে)
+export function createDetailedMarketStalls(): THREE.Group {
+  const market = new THREE.Group();
 
-  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.14, 6.0, 8), poleMat);
-  pole.position.y = 3.0;
-  pole.castShadow = true;
-  group.add(pole);
+  // Tong Tea Stall with Bamboo Bench & Tin Awning
+  const stall = new THREE.Group();
+  stall.position.set(0, 0, 0);
 
-  const arm = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.08, 0.08), poleMat);
-  arm.position.set(0.6, 5.9, 0);
-  group.add(arm);
-
-  const lantern = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.22, 0.12, 0.35, 8),
-    new THREE.MeshStandardMaterial({ color: 0xfef08a, emissive: 0xfef08a, emissiveIntensity: 1.0 })
+  // Packed Shelves backdrop
+  const shelvesTex = createShopShelvesTexture();
+  const shelvesMesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(2.4, 1.8),
+    new THREE.MeshStandardMaterial({ map: shelvesTex, roughness: 0.5 })
   );
-  lantern.position.set(1.2, 5.7, 0);
-  group.add(lantern);
+  shelvesMesh.position.set(0, 1.1, -0.6);
+  stall.add(shelvesMesh);
 
-  const light = new THREE.PointLight(0xfef08a, 1.8, 16);
-  light.position.set(1.2, 5.5, 0);
-  group.add(light);
+  // Wood counter
+  const counter = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.9, 1.1), sharedMats.wood);
+  counter.position.set(0, 0.45, 0);
+  stall.add(counter);
 
-  return group;
+  // Corrugated Blue Tin Awning
+  const tinMat = new THREE.MeshStandardMaterial({ color: 0x0369a1, roughness: 0.5, metalness: 0.6 });
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.08, 1.8), tinMat);
+  roof.rotation.x = 0.25;
+  roof.position.set(0, 2.2, 0.3);
+  stall.add(roof);
+
+  // Wooden Bamboo Bench (টং বেঞ্চ)
+  const bench = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.42, 0.4), sharedMats.wood);
+  bench.position.set(0, 0.21, 1.2);
+  stall.add(bench);
+
+  // Aluminum Tea Kettle (চা তৈরির কেটলি)
+  const kettle = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 0.28, 8), sharedMats.silverRim);
+  kettle.position.set(-0.6, 1.05, 0);
+  stall.add(kettle);
+
+  // Crates with Fish & Veggies
+  const fishTex = createVegFishBoxTexture('FISH');
+  const fishCrate = new THREE.Mesh(
+    new THREE.BoxGeometry(0.7, 0.35, 0.5),
+    new THREE.MeshStandardMaterial({ map: fishTex, roughness: 0.6 })
+  );
+  fishCrate.position.set(0.6, 1.05, 0);
+  stall.add(fishCrate);
+
+  market.add(stall);
+  return market;
+}
+
+// 13. 3D Mission Waypoint Beam & Pulsing Beacon Pillar (মিশন লোকেশন মার্কার ও আলোর স্তম্ভ)
+export function createMissionWaypointMarker(type: string): {
+  group: THREE.Group;
+  lightPillar: THREE.Mesh;
+  groundRing: THREE.Mesh;
+  iconMesh: THREE.Mesh;
+} {
+  const group = new THREE.Group();
+  group.name = 'Mission_Waypoint_Marker';
+
+  // Tall Vertical Translucent Light Beam (Pillar of Light)
+  const pillarGeo = new THREE.CylinderGeometry(0.45, 0.45, 36, 12, 1, true);
+  const pillarMat = new THREE.MeshBasicMaterial({
+    color: 0xfacc15,
+    transparent: true,
+    opacity: 0.35,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+  const lightPillar = new THREE.Mesh(pillarGeo, pillarMat);
+  lightPillar.position.y = 18;
+  group.add(lightPillar);
+
+  // Holographic Ground Target Ring
+  const ringGeo = new THREE.RingGeometry(1.2, 1.8, 24);
+  ringGeo.rotateX(-Math.PI / 2);
+  const ringMat = new THREE.MeshBasicMaterial({
+    color: 0xfacc15,
+    transparent: true,
+    opacity: 0.75,
+    side: THREE.DoubleSide,
+  });
+  const groundRing = new THREE.Mesh(ringGeo, ringMat);
+  groundRing.position.y = 0.05;
+  group.add(groundRing);
+
+  // Floating 3D Target Badge
+  const iconCanvas = document.createElement('canvas');
+  iconCanvas.width = 128;
+  iconCanvas.height = 128;
+  const iCtx = iconCanvas.getContext('2d')!;
+  iCtx.fillStyle = '#facc15';
+  iCtx.beginPath();
+  iCtx.arc(64, 64, 56, 0, Math.PI * 2);
+  iCtx.fill();
+  iCtx.strokeStyle = '#0f172a';
+  iCtx.lineWidth = 6;
+  iCtx.stroke();
+
+  let symbol = '🎯';
+  if (type === 'STEAL_SWEET') symbol = '🍬';
+  else if (type === 'STEAL_TEA') symbol = '🍵';
+  else if (type === 'STEAL_FISH') symbol = '🐟';
+  else if (type === 'DRIVE_CNG') symbol = '🛺';
+  else if (type === 'ESCAPE_POLICE') symbol = '🚩';
+
+  iCtx.font = '54px sans-serif';
+  iCtx.textAlign = 'center';
+  iCtx.textBaseline = 'middle';
+  iCtx.fillText(symbol, 64, 68);
+
+  const iconTex = new THREE.CanvasTexture(iconCanvas);
+  const iconMesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.4, 1.4),
+    new THREE.MeshBasicMaterial({ map: iconTex, transparent: true, side: THREE.DoubleSide })
+  );
+  iconMesh.position.y = 2.4;
+  group.add(iconMesh);
+
+  return { group, lightPillar, groundRing, iconMesh };
 }

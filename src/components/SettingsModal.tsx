@@ -136,6 +136,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             />
           </div>
 
+          {/* Performance Monitor Toggle */}
+          <div className="flex items-center justify-between p-3 bg-slate-950/80 rounded-xl border border-slate-800">
+            <div className="flex flex-col">
+              <span className="text-sm font-bold text-emerald-400">FPS ও পারফরম্যান্স মনিটর দেখান</span>
+              <span className="text-[11px] text-slate-400">FPS, ফ্রেমটাইম, ড্র কল ও এনপিসি কাউন্ট</span>
+            </div>
+            <input
+              type="checkbox"
+              checked={settings.showPerfMonitor}
+              onChange={(e) => onUpdateSettings({ showPerfMonitor: e.target.checked })}
+              className="w-5 h-5 accent-emerald-500 cursor-pointer rounded"
+            />
+          </div>
+
           <button
             onClick={onClose}
             className="w-full py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl transition cursor-pointer mt-2"

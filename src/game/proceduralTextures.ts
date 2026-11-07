@@ -1,131 +1,152 @@
 import * as THREE from 'three';
 
 /**
- * Procedural High-Fidelity Textures for Amra Chor (Dhaka 3D Open World)
- * All textures generated in code via HTML5 2D Canvas with SRGBColorSpace & anisotropy.
+ * Amra Chor - High-Fidelity Cached Procedural Textures
+ * Instant generation without blocking CPU loops.
+ * All textures set to SRGBColorSpace with mipmaps and max anisotropy.
  */
 
-function makeTexture(canvas: HTMLCanvasElement, repeatX = 1, repeatY = 1): THREE.CanvasTexture {
+const textureCache = new Map<string, THREE.CanvasTexture>();
+
+function makeTexture(
+  cacheKey: string,
+  canvas: HTMLCanvasElement,
+  repeatX = 1,
+  repeatY = 1
+): THREE.CanvasTexture {
+  if (textureCache.has(cacheKey)) {
+    return textureCache.get(cacheKey)!;
+  }
+
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.generateMipmaps = true;
   tex.minFilter = THREE.LinearMipmapLinearFilter;
   tex.magFilter = THREE.LinearFilter;
-  tex.anisotropy = 8;
+  tex.anisotropy = 4;
   if (repeatX !== 1 || repeatY !== 1) {
     tex.wrapS = THREE.RepeatWrapping;
     tex.wrapT = THREE.RepeatWrapping;
     tex.repeat.set(repeatX, repeatY);
   }
+
+  textureCache.set(cacheKey, tex);
   return tex;
 }
 
-// 1. Detailed Asphalt Road Texture (Cracks, Weathering, Markings)
+// 1. Detailed Dhaka Asphalt Road Texture (with Zebra Crossings, Road Markings, Hazard Curbs)
 export function createDetailedRoadTexture(): THREE.CanvasTexture {
+  const key = 'road_asphalt_dhaka';
+  if (textureCache.has(key)) return textureCache.get(key)!;
+
   const canvas = document.createElement('canvas');
-  canvas.width = 1024;
+  canvas.width = 512;
   canvas.height = 1024;
   const ctx = canvas.getContext('2d')!;
 
-  // Dark asphalt base
-  ctx.fillStyle = '#222428';
-  ctx.fillRect(0, 0, 1024, 1024);
+  // Dark asphalt base with subtle tone gradient
+  const bgGrad = ctx.createLinearGradient(0, 0, 512, 0);
+  bgGrad.addColorStop(0, '#1c1e22');
+  bgGrad.addColorStop(0.5, '#262930');
+  bgGrad.addColorStop(1, '#1c1e22');
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0, 0, 512, 1024);
 
-  // Surface grit and tarmac grain
-  const imgData = ctx.getImageData(0, 0, 1024, 1024);
-  const data = imgData.data;
-  for (let i = 0; i < data.length; i += 4) {
-    const grain = (Math.random() - 0.5) * 28;
-    data[i] = Math.min(255, Math.max(0, data[i] + grain));
-    data[i + 1] = Math.min(255, Math.max(0, data[i + 1] + grain));
-    data[i + 2] = Math.min(255, Math.max(0, data[i + 2] + grain));
-  }
-  ctx.putImageData(imgData, 0, 0);
-
-  // Weathered oil stains & tire tracks
-  ctx.fillStyle = 'rgba(15, 15, 18, 0.45)';
-  for (let i = 0; i < 8; i++) {
-    const x = 160 + i * 90 + Math.random() * 40;
-    ctx.fillRect(x, 0, 35, 1024);
+  // Road grit and tire tracks
+  ctx.fillStyle = 'rgba(10, 12, 15, 0.4)';
+  for (let i = 0; i < 14; i++) {
+    const x = 40 + i * 32;
+    ctx.fillRect(x, 0, 16, 1024);
   }
 
-  // Asphalt cracks
-  ctx.strokeStyle = 'rgba(10, 10, 12, 0.6)';
-  ctx.lineWidth = 2;
-  for (let c = 0; c < 5; c++) {
+  // Double Yellow Center Divider Line (Bengali Highway Standard)
+  ctx.fillStyle = '#f59e0b';
+  ctx.fillRect(250, 0, 5, 1024);
+  ctx.fillRect(257, 0, 5, 1024);
+
+  // White Outer Lane Boundary Lines
+  ctx.fillStyle = '#f8fafc';
+  ctx.fillRect(35, 0, 8, 1024);
+  ctx.fillRect(469, 0, 8, 1024);
+
+  // Dashed lane lines
+  ctx.fillStyle = '#cbd5e1';
+  for (let y = 30; y < 1024; y += 90) {
+    ctx.fillRect(142, y, 6, 45);
+    ctx.fillRect(364, y, 6, 45);
+  }
+
+  // Pedestrian Zebra Crossings (জেব্রা ক্রসিং)
+  ctx.fillStyle = '#ffffff';
+  for (let x = 45; x < 465; x += 36) {
+    ctx.fillRect(x, 120, 24, 75);
+    ctx.fillRect(x, 820, 24, 75);
+  }
+
+  // Stop lines before zebra crossings
+  ctx.fillRect(40, 95, 432, 12);
+  ctx.fillRect(40, 795, 432, 12);
+
+  // Directional Lane Arrows
+  const drawArrow = (ax: number, ay: number) => {
     ctx.beginPath();
-    let cx = Math.random() * 1024;
-    let cy = Math.random() * 1024;
-    ctx.moveTo(cx, cy);
-    for (let s = 0; s < 6; s++) {
-      cx += (Math.random() - 0.5) * 60;
-      cy += (Math.random() - 0.5) * 60;
-      ctx.lineTo(cx, cy);
-    }
-    ctx.stroke();
-  }
+    ctx.moveTo(ax, ay - 24);
+    ctx.lineTo(ax - 12, ay);
+    ctx.lineTo(ax - 5, ay);
+    ctx.lineTo(ax - 5, ay + 24);
+    ctx.lineTo(ax + 5, ay + 24);
+    ctx.lineTo(ax + 5, ay);
+    ctx.lineTo(ax + 12, ay);
+    ctx.closePath();
+    ctx.fill();
+  };
+  drawArrow(145, 340);
+  drawArrow(367, 680);
 
-  // Double Yellow Center Divider Lines (Weathered)
-  ctx.fillStyle = '#eab308';
-  for (let y = 0; y < 1024; y += 4) {
-    if (Math.random() > 0.08) {
-      ctx.fillRect(502, y, 7, 4);
-      ctx.fillRect(515, y, 7, 4);
-    }
-  }
-
-  // White Outer Road Boundary Markings
-  ctx.fillStyle = '#f1f5f9';
-  for (let y = 0; y < 1024; y += 4) {
-    if (Math.random() > 0.06) {
-      ctx.fillRect(60, y, 10, 4);
-      ctx.fillRect(954, y, 10, 4);
-    }
-  }
-
-  // Manhole Cover
-  ctx.fillStyle = '#1e2024';
+  // Cast Iron Sewer / Manhole Cover
+  ctx.fillStyle = '#1e293b';
   ctx.beginPath();
-  ctx.arc(380, 512, 42, 0, Math.PI * 2);
+  ctx.arc(200, 512, 28, 0, Math.PI * 2);
   ctx.fill();
-  ctx.strokeStyle = '#374151';
-  ctx.lineWidth = 4;
+  ctx.strokeStyle = '#475569';
+  ctx.lineWidth = 3;
   ctx.stroke();
 
-  return makeTexture(canvas, 1, 8);
+  return makeTexture(key, canvas, 1, 8);
 }
 
-// 2. Interlocking Footpath Pavement Tiles (ফুটপাতের পেভমেন্ট ও ড্রেন)
+// 2. Interlocking Footpath Pavement & Drainage
 export function createFootpathTexture(): THREE.CanvasTexture {
+  const key = 'footpath_tiles';
+  if (textureCache.has(key)) return textureCache.get(key)!;
+
   const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 512;
+  canvas.width = 256;
+  canvas.height = 256;
   const ctx = canvas.getContext('2d')!;
 
-  // Concrete reddish/grey paving tile base
-  ctx.fillStyle = '#9ca3af';
-  ctx.fillRect(0, 0, 512, 512);
+  ctx.fillStyle = '#a1a1aa';
+  ctx.fillRect(0, 0, 256, 256);
 
-  // Diamond / Hex interlocking paving stones
-  const tileSize = 64;
-  for (let x = 0; x < 512; x += tileSize) {
-    for (let y = 0; y < 512; y += tileSize) {
+  const tileSize = 32;
+  for (let x = 0; x < 256; x += tileSize) {
+    for (let y = 0; y < 256; y += tileSize) {
       const isAlt = ((x + y) / tileSize) % 2 === 0;
-      ctx.fillStyle = isAlt ? '#cbd5e1' : '#b91c1c25';
-      ctx.fillRect(x + 2, y + 2, tileSize - 4, tileSize - 4);
-      ctx.strokeStyle = '#64748b';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(x + 1, y + 1, tileSize - 2, tileSize - 2);
+      ctx.fillStyle = isAlt ? '#d4d4d8' : '#e4e4e7';
+      ctx.fillRect(x + 1, y + 1, tileSize - 2, tileSize - 2);
+      ctx.strokeStyle = '#71717a';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x, y, tileSize, tileSize);
     }
   }
 
-  // Drain grating on one edge
-  ctx.fillStyle = '#1e293b';
-  for (let y = 8; y < 512; y += 24) {
-    ctx.fillRect(490, y, 16, 10);
+  // Curb edge with yellow/black hazard striping
+  for (let y = 0; y < 256; y += 32) {
+    ctx.fillStyle = (y / 32) % 2 === 0 ? '#facc15' : '#0f172a';
+    ctx.fillRect(0, y, 14, 32);
   }
 
-  return makeTexture(canvas, 4, 16);
+  return makeTexture(key, canvas, 4, 16);
 }
 
 // 3. High Quality Bengali Shop Signboards
@@ -137,476 +158,578 @@ export function createRichShopBanner(
   bgSecondary: string,
   badgeIcon: string
 ): THREE.CanvasTexture {
+  const key = `banner_${titleBn}`;
+  if (textureCache.has(key)) return textureCache.get(key)!;
+
   const canvas = document.createElement('canvas');
-  canvas.width = 1024;
-  canvas.height = 256;
+  canvas.width = 512;
+  canvas.height = 128;
   const ctx = canvas.getContext('2d')!;
 
-  // Gradient background
-  const grad = ctx.createLinearGradient(0, 0, 1024, 0);
+  const grad = ctx.createLinearGradient(0, 0, 512, 0);
   grad.addColorStop(0, bgPrimary);
   grad.addColorStop(0.5, bgSecondary);
   grad.addColorStop(1, bgPrimary);
   ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, 1024, 256);
+  ctx.fillRect(0, 0, 512, 128);
 
-  // Ornate traditional frame border
+  // Border frame
   ctx.strokeStyle = '#fde047';
-  ctx.lineWidth = 8;
-  ctx.strokeRect(10, 10, 1004, 236);
+  ctx.lineWidth = 4;
+  ctx.strokeRect(4, 4, 504, 120);
 
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 3;
-  ctx.strokeRect(20, 20, 984, 216);
-
-  // Badge / Icon Circle at left
+  // Icon Circle
   ctx.fillStyle = '#ffffff';
   ctx.beginPath();
-  ctx.arc(100, 128, 65, 0, Math.PI * 2);
+  ctx.arc(52, 64, 32, 0, Math.PI * 2);
   ctx.fill();
-  ctx.strokeStyle = '#f59e0b';
-  ctx.lineWidth = 6;
+  ctx.strokeStyle = '#eab308';
+  ctx.lineWidth = 3;
   ctx.stroke();
 
-  ctx.font = '54px sans-serif';
+  ctx.font = '28px sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(badgeIcon, 100, 132);
+  ctx.fillText(badgeIcon, 52, 66);
 
-  // Main Bengali Title with 3D drop shadow
+  // Title
   ctx.textAlign = 'left';
   ctx.fillStyle = '#0f172a';
-  ctx.font = 'bold 72px "Hind Siliguri", "Arial", sans-serif';
-  ctx.fillText(titleBn, 196, 104);
+  ctx.font = 'bold 36px "Hind Siliguri", sans-serif';
+  ctx.fillText(titleBn, 102, 52);
 
   ctx.fillStyle = '#ffffff';
-  ctx.fillText(titleBn, 192, 100);
+  ctx.fillText(titleBn, 100, 50);
 
   // Subtitle
   ctx.fillStyle = '#fef08a';
-  ctx.font = 'bold 36px "Hind Siliguri", "Arial", sans-serif';
-  ctx.fillText(subBn, 195, 175);
+  ctx.font = 'bold 18px "Hind Siliguri", sans-serif';
+  ctx.fillText(subBn, 102, 88);
 
-  // Contact / Address pill at right
-  ctx.fillStyle = 'rgba(0,0,0,0.45)';
-  ctx.roundRect?.(760, 160, 230, 48, 12) ?? ctx.fillRect(760, 160, 230, 48);
-  ctx.fill();
-  ctx.fillStyle = '#ffffff';
-  ctx.font = '22px "Hind Siliguri", monospace';
-  ctx.fillText(phoneBn, 775, 192);
+  // Phone Pill
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.fillRect(370, 84, 130, 26);
+  ctx.fillStyle = '#38bdf8';
+  ctx.font = 'bold 12px monospace';
+  ctx.fillText(phoneBn, 376, 101);
 
-  return makeTexture(canvas);
+  return makeTexture(key, canvas);
 }
 
-// 4. Multi-Storey Building Wall Textures (Brick + Weathered Stucco + Windows)
+// 4. Multi-Storey Building Wall & Window Facade Texture
 export function createBuildingFacadeTexture(
   wallBaseColor: string,
   accentColor: string,
   brickMode = false
 ): THREE.CanvasTexture {
+  const key = `facade_${wallBaseColor}_${accentColor}_${brickMode}`;
+  if (textureCache.has(key)) return textureCache.get(key)!;
+
   const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 1024;
+  canvas.width = 256;
+  canvas.height = 512;
   const ctx = canvas.getContext('2d')!;
 
   ctx.fillStyle = wallBaseColor;
-  ctx.fillRect(0, 0, 512, 1024);
+  ctx.fillRect(0, 0, 256, 512);
 
-  // Brick pattern or stucco noise
+  // Brick lines
   if (brickMode) {
-    ctx.strokeStyle = 'rgba(0,0,0,0.15)';
-    ctx.lineWidth = 2;
-    for (let y = 0; y < 1024; y += 24) {
+    ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+    ctx.lineWidth = 1;
+    for (let y = 0; y < 512; y += 16) {
       ctx.beginPath();
       ctx.moveTo(0, y);
-      ctx.lineTo(512, y);
+      ctx.lineTo(256, y);
       ctx.stroke();
-      const offset = (y / 24) % 2 === 0 ? 0 : 25;
-      for (let x = offset; x < 512; x += 50) {
+      const offset = (y / 16) % 2 === 0 ? 0 : 16;
+      for (let x = offset; x < 256; x += 32) {
         ctx.beginPath();
         ctx.moveTo(x, y);
-        ctx.lineTo(x, y + 24);
+        ctx.lineTo(x, y + 16);
         ctx.stroke();
       }
     }
-  } else {
-    // Weathered water streaks down building
-    for (let i = 0; i < 40; i++) {
-      const x = Math.random() * 512;
-      const w = 4 + Math.random() * 12;
-      ctx.fillStyle = 'rgba(0,0,0,0.06)';
-      ctx.fillRect(x, Math.random() * 300, w, 400 + Math.random() * 400);
-    }
   }
 
-  // Horizontal floor molding trims
-  ctx.fillStyle = accentColor;
-  for (let f = 1; f <= 4; f++) {
-    const y = f * 240;
-    ctx.fillRect(0, y, 512, 16);
-    ctx.fillStyle = 'rgba(0,0,0,0.2)';
-    ctx.fillRect(0, y + 16, 512, 6);
+  // Multi-Storey Glass Windows with Frames & Balconies
+  for (let floor = 1; floor <= 4; floor++) {
+    const fy = floor * 110 - 20;
+
+    // Floor ledge trim
     ctx.fillStyle = accentColor;
-  }
+    ctx.fillRect(0, fy + 75, 256, 8);
 
-  // Windows with tinted glass, frames, and interior curtains
-  for (let floor = 0; floor < 4; floor++) {
-    const fy = floor * 240 + 45;
-    for (let wx = 60; wx < 460; wx += 150) {
-      // Concrete window border
-      ctx.fillStyle = accentColor;
-      ctx.fillRect(wx - 6, fy - 6, 92, 132);
+    // 3 Windows per floor
+    for (let w = 0; w < 3; w++) {
+      const wx = 22 + w * 78;
+      const wy = fy;
 
-      // Glass pane
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(wx, fy, 80, 120);
+      // Window Concrete Frame
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(wx - 2, wy - 2, 54, 70);
 
-      // Window reflection gradient
-      const rGrad = ctx.createLinearGradient(wx, fy, wx + 80, fy + 120);
-      rGrad.addColorStop(0, 'rgba(56, 189, 248, 0.5)');
-      rGrad.addColorStop(0.5, 'rgba(15, 23, 42, 0.8)');
-      rGrad.addColorStop(1, 'rgba(30, 41, 59, 0.9)');
-      ctx.fillStyle = rGrad;
-      ctx.fillRect(wx, fy, 80, 120);
+      // Glass tint with sky reflection
+      const glassGrad = ctx.createLinearGradient(wx, wy, wx + 50, wy + 66);
+      glassGrad.addColorStop(0, '#0284c7');
+      glassGrad.addColorStop(0.5, '#38bdf8');
+      glassGrad.addColorStop(1, '#0369a1');
+      ctx.fillStyle = glassGrad;
+      ctx.fillRect(wx, wy, 50, 66);
 
-      // Curtains
-      ctx.fillStyle = (floor + wx) % 2 === 0 ? 'rgba(234, 179, 8, 0.7)' : 'rgba(239, 68, 68, 0.7)';
-      ctx.fillRect(wx + 2, fy + 2, 24, 70);
-      ctx.fillRect(wx + 54, fy + 2, 24, 70);
+      // Window cross dividers
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillRect(wx + 23, wy, 4, 66);
+      ctx.fillRect(wx, wy + 31, 50, 4);
 
-      // Window cross grille (grill)
-      ctx.strokeStyle = '#e2e8f0';
-      ctx.lineWidth = 3;
-      ctx.strokeRect(wx, fy, 80, 120);
-      ctx.beginPath();
-      ctx.moveTo(wx + 40, fy);
-      ctx.lineTo(wx + 40, fy + 120);
-      ctx.moveTo(wx, fy + 60);
-      ctx.lineTo(wx + 80, fy + 60);
-      ctx.stroke();
-
-      // Air Conditioner under some windows
-      if ((floor + wx) % 3 === 0) {
+      // AC Outdoor Unit under some windows
+      if ((floor + w) % 2 === 0) {
         ctx.fillStyle = '#e2e8f0';
-        ctx.fillRect(wx + 8, fy + 126, 64, 40);
-        ctx.strokeStyle = '#94a3b8';
-        ctx.strokeRect(wx + 8, fy + 126, 64, 40);
+        ctx.fillRect(wx + 4, wy + 72, 38, 22);
         ctx.fillStyle = '#475569';
         ctx.beginPath();
-        ctx.arc(wx + 28, fy + 146, 12, 0, Math.PI * 2);
+        ctx.arc(wx + 23, wy + 83, 7, 0, Math.PI * 2);
         ctx.fill();
       }
     }
   }
 
-  return makeTexture(canvas);
+  return makeTexture(key, canvas, 1, 1);
 }
 
-// 5. Authentic Dhaka Bus Side Texture ("ঢাকা মেট্রো বাস")
+// 5. Authentic Dhaka Bus Livery Texture ("মুড়ির টিন" / লোকাল বাস)
 export function createBusSideTexture(): THREE.CanvasTexture {
+  const key = 'bus_livery_dhaka';
+  if (textureCache.has(key)) return textureCache.get(key)!;
+
   const canvas = document.createElement('canvas');
-  canvas.width = 1024;
-  canvas.height = 256;
+  canvas.width = 512;
+  canvas.height = 128;
   const ctx = canvas.getContext('2d')!;
 
-  // Classic red-and-green body
-  ctx.fillStyle = '#15803d'; // Green lower half
-  ctx.fillRect(0, 0, 1024, 256);
+  // Green & Yellow Dhaka Bus dual tone
+  ctx.fillStyle = '#15803d';
+  ctx.fillRect(0, 0, 512, 128);
 
-  ctx.fillStyle = '#b91c1c'; // Red top half
-  ctx.fillRect(0, 0, 1024, 120);
-
-  // Yellow separation stripe
   ctx.fillStyle = '#facc15';
-  ctx.fillRect(0, 115, 1024, 16);
+  ctx.fillRect(0, 50, 512, 30);
 
-  // Row of tinted bus passenger windows
+  // Red accent stripe
+  ctx.fillStyle = '#b91c1c';
+  ctx.fillRect(0, 80, 512, 8);
+
+  // Bengali Typography & Dhaka Metro Route
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 20px "Hind Siliguri", sans-serif';
+  ctx.fillText('ঢাকা পরিবহন • সিটিং সার্ভিস', 30, 40);
+
   ctx.fillStyle = '#0f172a';
-  for (let x = 60; x < 960; x += 110) {
-    ctx.fillRect(x, 24, 90, 75);
-    ctx.strokeStyle = '#e2e8f0';
-    ctx.lineWidth = 3;
-    ctx.strokeRect(x, 24, 90, 75);
+  ctx.font = 'bold 16px "Hind Siliguri", sans-serif';
+  ctx.fillText('গুলিস্তান — ফার্মগেট — মিরপুর — সাভার', 40, 72);
 
-    // Passenger silhouettes
-    ctx.fillStyle = '#334155';
-    ctx.beginPath();
-    ctx.arc(x + 45, 60, 14, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#0f172a';
-  }
-
-  // Route banner in Bengali
+  // Registration Plate
   ctx.fillStyle = '#ffffff';
-  ctx.textAlign = 'center';
-  ctx.font = 'bold 36px "Hind Siliguri", sans-serif';
-  ctx.fillText('ঢাকা মেট্রো — মিরপুর ১০ ➔ ফার্মগেট ➔ গুলিস্তান', 512, 185);
+  ctx.fillRect(400, 95, 100, 24);
+  ctx.fillStyle = '#0f172a';
+  ctx.font = 'bold 11px monospace';
+  ctx.fillText('ঢাকা মেট্রো-ব ১১-২১২১', 404, 112);
 
-  ctx.fillStyle = '#fef08a';
-  ctx.font = 'bold 22px "Hind Siliguri", sans-serif';
-  ctx.fillText('সিটিং সার্ভিস • ভলভো সুপার ডিলাক্স', 512, 225);
-
-  return makeTexture(canvas);
+  return makeTexture(key, canvas);
 }
 
-// 6. Detailed Traditional Bengali Rickshaw Art
+// 6. Traditional Colorful Rickshaw Art (রিকশা আর্ট)
 export function createRichRickshawArt(): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 512;
-  const ctx = canvas.getContext('2d')!;
+  const key = 'rickshaw_art_traditional';
+  if (textureCache.has(key)) return textureCache.get(key)!;
 
-  // Bright canary yellow background
-  ctx.fillStyle = '#f59e0b';
-  ctx.fillRect(0, 0, 512, 512);
-
-  // Double ornate floral borders
-  ctx.lineWidth = 16;
-  ctx.strokeStyle = '#dc2626';
-  ctx.strokeRect(10, 10, 492, 492);
-  ctx.lineWidth = 6;
-  ctx.strokeStyle = '#15803d';
-  ctx.strokeRect(26, 26, 460, 460);
-
-  // Ornate central sunburst medallion
-  ctx.beginPath();
-  ctx.arc(256, 230, 170, 0, Math.PI * 2);
-  ctx.fillStyle = '#1e3a8a';
-  ctx.fill();
-  ctx.lineWidth = 10;
-  ctx.strokeStyle = '#fef08a';
-  ctx.stroke();
-
-  // Majestic Bangladeshi Peacock (ময়ূর)
-  // Body
-  ctx.fillStyle = '#065f46';
-  ctx.beginPath();
-  ctx.ellipse(256, 250, 70, 45, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Long graceful neck
-  ctx.fillStyle = '#0284c7';
-  ctx.beginPath();
-  ctx.moveTo(215, 240);
-  ctx.quadraticCurveTo(200, 170, 230, 150);
-  ctx.quadraticCurveTo(245, 175, 235, 240);
-  ctx.fill();
-
-  // Head and crown feathers
-  ctx.beginPath();
-  ctx.arc(230, 145, 22, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Crown crest
-  ctx.strokeStyle = '#facc15';
-  ctx.lineWidth = 4;
-  for (let a = -0.4; a <= 0.4; a += 0.2) {
-    ctx.beginPath();
-    ctx.moveTo(230, 130);
-    ctx.lineTo(230 + a * 40, 100);
-    ctx.stroke();
-    ctx.fillStyle = '#ef4444';
-    ctx.beginPath();
-    ctx.arc(230 + a * 40, 96, 6, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // Beak and eye
-  ctx.fillStyle = '#f97316';
-  ctx.beginPath();
-  ctx.moveTo(212, 144);
-  ctx.lineTo(185, 152);
-  ctx.lineTo(212, 158);
-  ctx.fill();
-
-  ctx.fillStyle = '#ffffff';
-  ctx.beginPath();
-  ctx.arc(224, 142, 6, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#000000';
-  ctx.beginPath();
-  ctx.arc(222, 142, 3, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Colorful Peacock Fan Feathers
-  const featherColors = ['#dc2626', '#eab308', '#10b981', '#3b82f6', '#ec4899', '#8b5cf6'];
-  for (let i = 0; i < 11; i++) {
-    const angle = -1.2 + (i * 2.4) / 10;
-    ctx.save();
-    ctx.translate(285, 240);
-    ctx.rotate(angle);
-    ctx.fillStyle = featherColors[i % featherColors.length];
-    ctx.beginPath();
-    ctx.ellipse(85, 0, 55, 16, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#fef08a';
-    ctx.beginPath();
-    ctx.arc(115, 0, 9, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#1e3a8a';
-    ctx.beginPath();
-    ctx.arc(115, 0, 5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  }
-
-  // Classic Bengali Rickshaw Bottom Banner
-  ctx.fillStyle = '#991b1b';
-  ctx.fillRect(35, 415, 442, 70);
-  ctx.strokeStyle = '#fde047';
-  ctx.lineWidth = 4;
-  ctx.strokeRect(35, 415, 442, 70);
-
-  ctx.fillStyle = '#fef08a';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.font = 'bold 38px "Hind Siliguri", sans-serif';
-  ctx.fillText('ঢাকা মেট্রো — রিকশা', 256, 450);
-
-  return makeTexture(canvas);
-}
-
-// 7. Human Face Texture for Stylized Character Heads (Eyes, Eyebrows, Lips)
-export function createHumanFaceTexture(skinHex: string, hasMoustache = false, isOld = false): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 512;
-  const ctx = canvas.getContext('2d')!;
-
-  // Skin tone base
-  ctx.fillStyle = skinHex;
-  ctx.fillRect(0, 0, 512, 512);
-
-  // Soft facial shading
-  const grad = ctx.createRadialGradient(256, 256, 60, 256, 256, 240);
-  grad.addColorStop(0, 'rgba(255,255,255,0.08)');
-  grad.addColorStop(1, 'rgba(0,0,0,0.18)');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, 512, 512);
-
-  // Eyebrows
-  ctx.fillStyle = isOld ? '#64748b' : '#1c1917';
-  ctx.beginPath();
-  ctx.ellipse(190, 185, 45, 10, -0.15, 0, Math.PI * 2);
-  ctx.ellipse(322, 185, 45, 10, 0.15, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Eyes with pupils
-  const drawEye = (x: number, y: number) => {
-    // Sclera
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.ellipse(x, y, 28, 16, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#1e293b';
-    ctx.lineWidth = 3;
-    ctx.stroke();
-
-    // Iris (Deep brown)
-    ctx.fillStyle = '#3f1c04';
-    ctx.beginPath();
-    ctx.arc(x, y, 12, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Pupil
-    ctx.fillStyle = '#000000';
-    ctx.beginPath();
-    ctx.arc(x, y, 6, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Specular highlight
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.arc(x - 3, y - 3, 3.5, 0, Math.PI * 2);
-    ctx.fill();
-  };
-
-  drawEye(190, 220);
-  drawEye(322, 220);
-
-  // Nose shading
-  ctx.fillStyle = 'rgba(0,0,0,0.18)';
-  ctx.beginPath();
-  ctx.moveTo(256, 220);
-  ctx.lineTo(245, 290);
-  ctx.lineTo(267, 290);
-  ctx.closePath();
-  ctx.fill();
-
-  // Nostrils
-  ctx.fillStyle = '#1c1917';
-  ctx.beginPath();
-  ctx.arc(244, 292, 4, 0, Math.PI * 2);
-  ctx.arc(268, 292, 4, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Moustache
-  if (hasMoustache) {
-    ctx.fillStyle = isOld ? '#94a3b8' : '#1c1917';
-    ctx.beginPath();
-    ctx.ellipse(256, 325, 65, 18, 0, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // Lips
-  ctx.fillStyle = '#9f4f4f';
-  ctx.beginPath();
-  ctx.ellipse(256, hasMoustache ? 355 : 345, 40, 12, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  return makeTexture(canvas);
-}
-
-// 8. Raw Market Vegetable & Fish Box Textures
-export function createVegFishBoxTexture(type: 'FISH' | 'VEG' | 'FRUIT'): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = 256;
   canvas.height = 256;
   const ctx = canvas.getContext('2d')!;
 
-  ctx.fillStyle = '#78350f'; // Wood box base
+  // Ornate red background
+  ctx.fillStyle = '#dc2626';
   ctx.fillRect(0, 0, 256, 256);
 
-  if (type === 'FISH') {
-    // Crushed ice base
-    ctx.fillStyle = '#e0f2fe';
-    ctx.fillRect(10, 10, 236, 236);
+  // Gold floral border
+  ctx.strokeStyle = '#facc15';
+  ctx.lineWidth = 6;
+  ctx.strokeRect(6, 6, 244, 244);
 
-    // Silver Hilsa Fish pattern
-    for (let i = 0; i < 6; i++) {
-      const y = 30 + i * 36;
-      ctx.fillStyle = '#94a3b8';
+  // Decorative peacock & floral motifs (stylized)
+  ctx.fillStyle = '#0284c7';
+  ctx.beginPath();
+  ctx.arc(128, 128, 70, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#fde047';
+  ctx.beginPath();
+  ctx.arc(128, 128, 55, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Peacock blue body
+  ctx.fillStyle = '#0369a1';
+  ctx.beginPath();
+  ctx.arc(128, 128, 38, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Bengali Art script
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 20px "Hind Siliguri", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('মায়ের দোয়া', 128, 60);
+  ctx.fillText('রিকশা আর্ট', 128, 205);
+
+  return makeTexture(key, canvas);
+}
+
+// 7. Green CNG Auto-Rickshaw Registration Plate & Markings
+export function createCNGDetailsTexture(): THREE.CanvasTexture {
+  const key = 'cng_plate_markings';
+  if (textureCache.has(key)) return textureCache.get(key)!;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d')!;
+
+  ctx.fillStyle = '#15803d';
+  ctx.fillRect(0, 0, 256, 128);
+
+  // License plate (Dhaka Metro TH)
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(20, 20, 160, 48);
+  ctx.strokeStyle = '#0f172a';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(20, 20, 160, 48);
+
+  ctx.fillStyle = '#0f172a';
+  ctx.font = 'bold 16px "Hind Siliguri", monospace';
+  ctx.fillText('ঢাকা মেট্রো-থ', 35, 42);
+  ctx.font = 'bold 18px monospace';
+  ctx.fillText('১১-৪২০২', 48, 62);
+
+  // Safety Warning
+  ctx.fillStyle = '#facc15';
+  ctx.font = 'bold 13px "Hind Siliguri", sans-serif';
+  ctx.fillText('ধূমপান স্বাস্থ্যের জন্য ক্ষতিকর', 20, 95);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 12px "Hind Siliguri", sans-serif';
+  ctx.fillText('ভাড়া মিটারে চলুন • ৪ জন যাত্রী', 20, 115);
+
+  return makeTexture(key, canvas);
+}
+
+// 8. Bangladesh Police Livery & Badge Texture
+export function createPoliceLiveryTexture(): THREE.CanvasTexture {
+  const key = 'police_car_livery';
+  if (textureCache.has(key)) return textureCache.get(key)!;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d')!;
+
+  // Silver / White patrol base
+  ctx.fillStyle = '#f8fafc';
+  ctx.fillRect(0, 0, 512, 128);
+
+  // Deep Navy Police Band
+  ctx.fillStyle = '#1e3a8a';
+  ctx.fillRect(0, 40, 512, 48);
+
+  // Yellow reflector stripe
+  ctx.fillStyle = '#facc15';
+  ctx.fillRect(0, 88, 512, 6);
+
+  // Police Text
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'black 32px "Hind Siliguri", sans-serif';
+  ctx.fillText('বাংলাদেশ পুলিশ', 30, 75);
+
+  ctx.font = '900 24px sans-serif';
+  ctx.fillText('POLICE • 999', 310, 75);
+
+  // Dhaka Metro Registration
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(400, 98, 100, 24);
+  ctx.fillStyle = '#0f172a';
+  ctx.font = 'bold 12px monospace';
+  ctx.fillText('ঢাকা মেট্রো-প ৯৯', 405, 115);
+
+  return makeTexture(key, canvas);
+}
+
+// 9. Detailed Stylized Human Face Texture
+export function createHumanFaceTexture(
+  skinHex: string,
+  hasMustache = false,
+  isPolice = false
+): THREE.CanvasTexture {
+  const key = `face_${skinHex}_${hasMustache}_${isPolice}`;
+  if (textureCache.has(key)) return textureCache.get(key)!;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d')!;
+
+  // Smooth warm skin base with subtle lighting gradient
+  const skinGrad = ctx.createRadialGradient(128, 128, 20, 128, 128, 128);
+  skinGrad.addColorStop(0, '#e59a72');
+  skinGrad.addColorStop(1, skinHex);
+  ctx.fillStyle = skinGrad;
+  ctx.fillRect(0, 0, 256, 256);
+
+  // Natural Eyes with eyelids, dark iris, pupil & white specular highlights
+  const drawEye = (x: number) => {
+    // Sclera
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.ellipse(x, 92, 18, 12, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Iris (Rich dark brown)
+    ctx.fillStyle = '#26170d';
+    ctx.beginPath();
+    ctx.arc(x, 92, 10, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Pupil
+    ctx.fillStyle = '#09090b';
+    ctx.beginPath();
+    ctx.arc(x, 92, 5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Specular corneal reflection
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(x - 3, 89, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Upper Eyelash line
+    ctx.strokeStyle = '#09090b';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(x, 88, 19, Math.PI * 1.15, Math.PI * 1.85);
+    ctx.stroke();
+
+    // Eyebrows
+    ctx.strokeStyle = '#18181b';
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.arc(x, 74, 20, Math.PI * 1.1, Math.PI * 1.9);
+    ctx.stroke();
+  };
+
+  drawEye(84);
+  drawEye(172);
+
+  // Nose Bridge & Nostril shading
+  ctx.fillStyle = 'rgba(0,0,0,0.18)';
+  ctx.beginPath();
+  ctx.moveTo(128, 92);
+  ctx.lineTo(116, 138);
+  ctx.lineTo(140, 138);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.beginPath();
+  ctx.arc(118, 136, 4, 0, Math.PI * 2);
+  ctx.arc(138, 136, 4, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Expressive Lips
+  ctx.fillStyle = '#9f1239';
+  ctx.beginPath();
+  ctx.ellipse(128, 175, 24, 7, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Bengali Mustache (গোঁফ)
+  if (hasMustache || isPolice) {
+    ctx.fillStyle = '#0f172a';
+    ctx.beginPath();
+    ctx.ellipse(108, 156, 26, 9, -0.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(148, 156, 26, 9, 0.2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  return makeTexture(key, canvas);
+}
+
+// 10. Plaid / Checked Trousers Fabric Texture (লুঙ্গি বা প্যান্টের চেক প্যাটার্ন)
+export function createPlaidTrousersTexture(): THREE.CanvasTexture {
+  const key = 'trousers_plaid_check';
+  if (textureCache.has(key)) return textureCache.get(key)!;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d')!;
+
+  ctx.fillStyle = '#1e3a8a'; // Deep Navy
+  ctx.fillRect(0, 0, 128, 128);
+
+  // Cyan / Teal checks
+  ctx.fillStyle = 'rgba(56, 189, 248, 0.45)';
+  for (let x = 0; x < 128; x += 16) ctx.fillRect(x, 0, 8, 128);
+  for (let y = 0; y < 128; y += 16) ctx.fillRect(0, y, 128, 8);
+
+  // Fine Red accent lines
+  ctx.fillStyle = 'rgba(239, 68, 68, 0.6)';
+  for (let x = 8; x < 128; x += 32) ctx.fillRect(x, 0, 2, 128);
+  for (let y = 8; y < 128; y += 32) ctx.fillRect(0, y, 128, 2);
+
+  return makeTexture(key, canvas, 2, 4);
+}
+
+// 11. Crisp Black-and-White Striped T-Shirt Texture
+export function createTShirtStripesTexture(): THREE.CanvasTexture {
+  const key = 'tshirt_stripes_bw';
+  if (textureCache.has(key)) return textureCache.get(key)!;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d')!;
+
+  ctx.fillStyle = '#f8fafc';
+  ctx.fillRect(0, 0, 128, 128);
+
+  ctx.fillStyle = '#0f172a';
+  for (let y = 0; y < 128; y += 32) {
+    ctx.fillRect(0, y, 128, 16);
+  }
+
+  return makeTexture(key, canvas, 1, 4);
+}
+
+// 12. Packed Dhaka Grocery & Tea Stall Shelves Texture (দোকানের আলমারি ও প্যাকেট)
+export function createShopShelvesTexture(): THREE.CanvasTexture {
+  const key = 'shop_shelves_dhaka';
+  if (textureCache.has(key)) return textureCache.get(key)!;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 512;
+  const ctx = canvas.getContext('2d')!;
+
+  // Dark wood shelf frame
+  ctx.fillStyle = '#451a03';
+  ctx.fillRect(0, 0, 512, 512);
+
+  // 4 Shelves packed with colorful Dhaka goods
+  for (let s = 0; s < 4; s++) {
+    const sy = s * 128;
+    // Shelf wood plank
+    ctx.fillStyle = '#78350f';
+    ctx.fillRect(0, sy + 112, 512, 16);
+
+    // Packets of Chanachur, Chips, Biscuits, Tea boxes
+    const colors = ['#ef4444', '#facc15', '#10b981', '#3b82f6', '#f97316', '#8b5cf6'];
+    for (let i = 0; i < 12; i++) {
+      const px = 15 + i * 40;
+      const c = colors[(s * 3 + i) % colors.length];
+      ctx.fillStyle = c;
+      ctx.fillRect(px, sy + 25, 32, 85);
+
+      // Packet label
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(px + 4, sy + 45, 24, 25);
+      ctx.fillStyle = '#0f172a';
+      ctx.font = 'bold 9px sans-serif';
+      ctx.fillText('PRAN', px + 6, sy + 60);
+    }
+  }
+
+  return makeTexture(key, canvas);
+}
+
+// 13. Comic Starburst Hit Spark Texture ("মারামারি চলছে!")
+export function createHitEffectTexture(): THREE.CanvasTexture {
+  const key = 'comic_hit_starburst';
+  if (textureCache.has(key)) return textureCache.get(key)!;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d')!;
+
+  ctx.clearRect(0, 0, 128, 128);
+
+  // Outer orange starburst
+  ctx.fillStyle = '#f97316';
+  ctx.beginPath();
+  const spikes = 12;
+  const rot = (Math.PI / 2) * 3;
+  let x = 64;
+  let y = 64;
+  const step = Math.PI / spikes;
+
+  ctx.moveTo(64, 64 - 58);
+  for (let i = 0; i < spikes; i++) {
+    x = 64 + Math.cos(rot + i * step * 2) * 58;
+    y = 64 + Math.sin(rot + i * step * 2) * 58;
+    ctx.lineTo(x, y);
+    x = 64 + Math.cos(rot + (i * step * 2 + step)) * 26;
+    y = 64 + Math.sin(rot + (i * step * 2 + step)) * 26;
+    ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fill();
+
+  // Inner bright yellow starburst
+  ctx.fillStyle = '#fef08a';
+  ctx.beginPath();
+  ctx.arc(64, 64, 24, 0, Math.PI * 2);
+  ctx.fill();
+
+  return makeTexture(key, canvas);
+}
+
+// 14. Colorful Vegetable / Fish Crate Texture
+export function createVegFishBoxTexture(type: 'FISH' | 'VEG' | 'SWEET'): THREE.CanvasTexture {
+  const key = `crate_${type}`;
+  if (textureCache.has(key)) return textureCache.get(key)!;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d')!;
+
+  if (type === 'FISH') {
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillRect(0, 0, 128, 128);
+    ctx.fillStyle = '#e2e8f0';
+    for (let i = 0; i < 4; i++) {
       ctx.beginPath();
-      ctx.ellipse(128, y, 75, 16, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#f8fafc';
-      ctx.beginPath();
-      ctx.ellipse(132, y - 3, 65, 8, 0, 0, Math.PI * 2);
+      ctx.ellipse(32 + i * 22, 64, 28, 8, Math.PI / 4, 0, Math.PI * 2);
       ctx.fill();
     }
-  } else if (type === 'VEG') {
-    ctx.fillStyle = '#14532d'; // Dark green basket
-    ctx.fillRect(10, 10, 236, 236);
-    // Red tomatoes and purple brinjals
-    for (let x = 30; x < 230; x += 45) {
-      for (let y = 30; y < 230; y += 45) {
-        ctx.fillStyle = (x + y) % 2 === 0 ? '#dc2626' : '#581c87';
+  } else if (type === 'SWEET') {
+    ctx.fillStyle = '#fef08a';
+    ctx.fillRect(0, 0, 128, 128);
+    for (let x = 20; x < 120; x += 30) {
+      for (let y = 20; y < 120; y += 30) {
+        ctx.fillStyle = (x + y) % 60 === 0 ? '#ffffff' : '#f97316';
         ctx.beginPath();
-        ctx.arc(x, y, 18, 0, Math.PI * 2);
+        ctx.arc(x, y, 11, 0, Math.PI * 2);
         ctx.fill();
       }
     }
   } else {
-    // Yellow bananas & mangoes
-    ctx.fillStyle = '#ca8a04';
-    ctx.fillRect(10, 10, 236, 236);
+    ctx.fillStyle = '#16a34a';
+    ctx.fillRect(0, 0, 128, 128);
+    ctx.fillStyle = '#ef4444';
     for (let i = 0; i < 8; i++) {
-      ctx.fillStyle = '#facc15';
       ctx.beginPath();
-      ctx.arc(40 + (i % 4) * 55, 60 + Math.floor(i / 4) * 80, 24, 0, Math.PI * 2);
+      ctx.arc(20 + (i % 3) * 38, 20 + Math.floor(i / 3) * 38, 12, 0, Math.PI * 2);
       ctx.fill();
     }
   }
 
-  return makeTexture(canvas);
+  return makeTexture(key, canvas);
 }

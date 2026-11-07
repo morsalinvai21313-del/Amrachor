@@ -34,6 +34,15 @@ export default function App() {
     speedKmh: 0,
   });
 
+  const [perfStats, setPerfStats] = useState({
+    fps: 60,
+    frameTimeMs: 16.6,
+    drawCalls: 38,
+    triangles: 12000,
+    activeNPCs: 18,
+    activeVehicles: 4,
+  });
+
   // Modals Visibility
   const [showShopModal, setShowShopModal] = useState(false);
   const [currentShopName, setCurrentShopName] = useState('ঢাকা সুইটস');
@@ -56,6 +65,7 @@ export default function App() {
     timeOfDay: 'DAY',
     weather: 'CLEAR',
     showTouchControls: true,
+    showPerfMonitor: true,
   });
 
   const [isMuted, setIsMuted] = useState(false);
@@ -70,6 +80,7 @@ export default function App() {
     const world = new GameWorld(mountRef.current);
     worldRef.current = world;
     world.activeMission = activeMission;
+    world.setGraphicsQuality(settings.graphicsQuality);
 
     // Callbacks from GameWorld
     world.onNearShop = (shopName, prompt) => {
@@ -112,11 +123,13 @@ export default function App() {
     };
 
     world.start();
+    world.setTitleMode(gameState === 'TITLE');
 
-    // Throttled sync for React HUD stats; avoids re-renders if stats are identical
+    // Throttled sync for React HUD stats and hardware performance monitor (250ms)
     const syncInterval = window.setInterval(() => {
       if (worldRef.current) {
         const s = worldRef.current.stats;
+        const mDist = worldRef.current.missionDistance;
         setStats((prev) => {
           if (
             prev.money === s.money &&
@@ -124,14 +137,18 @@ export default function App() {
             prev.stamina === s.stamina &&
             prev.wantedLevel === s.wantedLevel &&
             prev.isDriving === s.isDriving &&
-            prev.speedKmh === s.speedKmh
+            prev.speedKmh === s.speedKmh &&
+            prev.missionDistance === mDist
           ) {
             return prev;
           }
-          return { ...s };
+          return { ...s, missionDistance: mDist };
         });
+
+        const p = worldRef.current.perf;
+        setPerfStats({ ...p });
       }
-    }, 200);
+    }, 250);
 
     return () => {
       clearInterval(syncInterval);
@@ -139,6 +156,13 @@ export default function App() {
       worldRef.current = null;
     };
   }, []);
+
+  // Update title mode when gameState changes
+  useEffect(() => {
+    if (worldRef.current) {
+      worldRef.current.setTitleMode(gameState === 'TITLE');
+    }
+  }, [gameState]);
 
   // Update activeMission reference in world
   useEffect(() => {
@@ -151,8 +175,9 @@ export default function App() {
   useEffect(() => {
     if (worldRef.current) {
       worldRef.current.setEnvironmentTime(settings.timeOfDay, settings.weather);
+      worldRef.current.setGraphicsQuality(settings.graphicsQuality);
     }
-  }, [settings.timeOfDay, settings.weather]);
+  }, [settings.timeOfDay, settings.weather, settings.graphicsQuality]);
 
   // Handle Keyboard Inputs
   useEffect(() => {
@@ -185,7 +210,7 @@ export default function App() {
       }
       // Jump [Space]
       if (e.code === 'Space') {
-        world.inputJump = true;
+        world.triggerJumpImmediate();
       }
       // Mute [M]
       if (e.code === 'KeyM') {
@@ -241,31 +266,80 @@ export default function App() {
     };
   }, [nearShopPrompt]);
 
-  // Actions
+  // Zero-Latency Memoized Action Handlers
   const handleStartGame = () => {
+    soundEngine.initContext();
     setGameState('PLAYING');
     soundEngine.speakBengali('চোরগিরি করাই আমাদের কাম! পুলিশ থেকে বাঁচুন!', 1.1, 1.05);
   };
 
-  const handlePause = () => {
+  const handlePause = useCallback(() => {
     setGameState((prev) => (prev === 'PLAYING' ? 'PAUSED' : 'PLAYING'));
-  };
+  }, []);
 
-  const handleToggleMute = () => {
+  const handleToggleMute = useCallback(() => {
     const muted = soundEngine.toggleMute();
     setIsMuted(muted);
-  };
+  }, []);
 
   const handleJoystickMove = useCallback((x: number, y: number) => {
     if (worldRef.current) {
       worldRef.current.inputMove.x = x;
-      worldRef.current.inputMove.y = -y; // Invert for forward standard
+      worldRef.current.inputMove.y = -y;
     }
   }, []);
+
+  const handleJump = useCallback(() => {
+    if (worldRef.current) {
+      worldRef.current.triggerJumpImmediate();
+    }
+  }, []);
+
+  const handlePunch = useCallback(() => {
+    if (worldRef.current) {
+      worldRef.current.performPunch();
+    }
+  }, []);
+
+  const handleSprintToggle = useCallback((sprinting: boolean) => {
+    if (worldRef.current) {
+      worldRef.current.inputSprint = sprinting;
+    }
+  }, []);
+
+  const handleToggleVehicle = useCallback(() => {
+    if (worldRef.current) {
+      worldRef.current.toggleVehicle();
+    }
+  }, []);
+
+  const handleHonkHorn = useCallback(() => {
+    if (worldRef.current) {
+      worldRef.current.honkVehicleHorn();
+    }
+  }, []);
+
+  const handleInteract = useCallback(() => {
+    if (nearShopPrompt) {
+      setShowShopModal(true);
+    }
+  }, [nearShopPrompt]);
 
   const handleMiniMapDraw = useCallback((canvas: HTMLCanvasElement) => {
     if (worldRef.current) {
       worldRef.current.drawMiniMap(canvas);
+    }
+  }, []);
+
+  const handleSteer = useCallback((dir: number) => {
+    if (worldRef.current) {
+      worldRef.current.inputSteer = dir;
+    }
+  }, []);
+
+  const handleThrottle = useCallback((dir: number) => {
+    if (worldRef.current) {
+      worldRef.current.inputThrottle = dir;
     }
   }, []);
 
@@ -281,7 +355,6 @@ export default function App() {
   const handleContinueAfterMission = () => {
     setCompletedMission(null);
     setGameState('PLAYING');
-    // Set next unlocked mission if available
     const nextMission = missions.find((m) => m.id === (activeMission?.id ?? 0) + 1);
     if (nextMission) {
       setActiveMission(nextMission);
@@ -353,9 +426,9 @@ export default function App() {
         </div>
       )}
 
-      {/* In-Game HUD Overlay (Only when PLAYING or PAUSED) */}
+      {/* In-Game HUD Overlay */}
       {(gameState === 'PLAYING' || gameState === 'PAUSED') && (
-        <div className="absolute inset-0 z-10">
+        <div className="absolute inset-0 z-10 pointer-events-none">
           <HUD
             stats={stats}
             activeMission={activeMission}
@@ -363,67 +436,24 @@ export default function App() {
             onPause={handlePause}
             isMuted={isMuted}
             onToggleMute={handleToggleMute}
-            onJump={() => {
-              if (worldRef.current) worldRef.current.inputJump = true;
-            }}
-            onSprintToggle={(sprinting) => {
-              if (worldRef.current) worldRef.current.inputSprint = sprinting;
-            }}
-            onPunch={() => {
-              if (worldRef.current) worldRef.current.performPunch();
-            }}
-            onInteract={() => {
-              if (nearShopPrompt) setShowShopModal(true);
-            }}
-            onToggleVehicle={() => {
-              if (worldRef.current) worldRef.current.toggleVehicle();
-            }}
-            onHonkHorn={() => {
-              if (worldRef.current) worldRef.current.honkVehicleHorn();
-            }}
+            onJump={handleJump}
+            onSprintToggle={handleSprintToggle}
+            onPunch={handlePunch}
+            onInteract={handleInteract}
+            onToggleVehicle={handleToggleVehicle}
+            onHonkHorn={handleHonkHorn}
             onJoystickMove={handleJoystickMove}
+            onSteer={handleSteer}
+            onThrottle={handleThrottle}
             drawMiniMapCallback={handleMiniMapDraw}
             showTouchControls={settings.showTouchControls}
+            showPerfMonitor={settings.showPerfMonitor}
+            perfStats={perfStats}
           />
         </div>
       )}
 
-      {/* Paused Modal */}
-      {gameState === 'PAUSED' && (
-        <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-md z-40 flex items-center justify-center p-4">
-          <div className="w-full max-w-sm bg-slate-900 border-2 border-amber-500 rounded-3xl p-6 text-center flex flex-col gap-3 shadow-2xl">
-            <h2 className="text-3xl font-black text-amber-400">খেলা সাময়িক স্থগিত</h2>
-            <div className="text-xs text-slate-300">GAME PAUSED</div>
-
-            <button
-              onClick={() => setGameState('PLAYING')}
-              className="mt-2 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition cursor-pointer"
-            >
-              খেলা চালিয়ে যান (RESUME)
-            </button>
-            <button
-              onClick={() => setShowMissionsModal(true)}
-              className="py-2.5 bg-blue-900 hover:bg-blue-800 text-white font-bold rounded-xl transition cursor-pointer text-sm"
-            >
-              মিশন তালিকা
-            </button>
-            <button
-              onClick={() => setShowSettingsModal(true)}
-              className="py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl transition cursor-pointer text-sm"
-            >
-              সেটিংস
-            </button>
-            <button
-              onClick={() => setGameState('TITLE')}
-              className="py-2.5 bg-red-950 hover:bg-red-900 text-red-200 font-bold rounded-xl transition cursor-pointer text-sm"
-            >
-              মূল মেনুতে যান (MAIN MENU)
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Modals */}
+      {/* Shop Conversation & Goods Modal */}
       {showShopModal && (
         <ShopDialogModal
           shopName={currentShopName}
@@ -433,6 +463,7 @@ export default function App() {
         />
       )}
 
+      {/* Missions Catalog Modal */}
       {showMissionsModal && (
         <MissionsModal
           missions={missions}
@@ -442,14 +473,16 @@ export default function App() {
         />
       )}
 
-      {completedMission && gameState === 'MISSION_COMPLETE' && (
+      {/* Mission Complete Dialog */}
+      {gameState === 'MISSION_COMPLETE' && completedMission && (
         <MissionCompleteModal
           mission={completedMission}
           onContinue={handleContinueAfterMission}
         />
       )}
 
-      {isGameOver && gameState === 'GAME_OVER' && (
+      {/* Game Over Police Arrest Dialog */}
+      {gameState === 'GAME_OVER' && (
         <GameOverModal
           money={stats.money}
           onBribeRelease={handleBribeRelease}
@@ -457,22 +490,28 @@ export default function App() {
         />
       )}
 
+      {/* Character Wardrobe Modal */}
+      {showCharacterModal && (
+        <CharacterModal
+          onClose={() => setShowCharacterModal(false)}
+        />
+      )}
+
+      {/* Unity C# / 3D Asset Export Modal */}
       {showUnityModal && (
         <UnityExportModal onClose={() => setShowUnityModal(false)} />
       )}
 
-      {showCharacterModal && (
-        <CharacterModal onClose={() => setShowCharacterModal(false)} />
-      )}
-
+      {/* Settings Modal */}
       {showSettingsModal && (
         <SettingsModal
           settings={settings}
-          onUpdateSettings={(updated) => setSettings((prev) => ({ ...prev, ...updated }))}
+          onUpdateSettings={(newS) => setSettings((prev) => ({ ...prev, ...newS }))}
           onClose={() => setShowSettingsModal(false)}
         />
       )}
 
+      {/* About Modal */}
       {showAboutModal && (
         <AboutModal onClose={() => setShowAboutModal(false)} />
       )}

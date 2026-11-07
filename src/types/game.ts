@@ -26,8 +26,9 @@ export interface PlayerStats {
   maxStamina: number;
   wantedLevel: number; // 0 to 5
   isDriving: boolean;
-  drivingVehicleType: 'CNG' | 'RICKSHAW' | null;
+  drivingVehicleType: 'CNG' | 'RICKSHAW' | 'BUS' | 'CAR' | 'BIKE' | 'POLICE_CAR' | null;
   speedKmh: number;
+  missionDistance?: number | null;
 }
 
 export interface DialogOption {
@@ -50,4 +51,5 @@ export interface GameSettings {
   timeOfDay: TimeOfDay;
   weather: WeatherType;
   showTouchControls: boolean;
+  showPerfMonitor: boolean;
 }
